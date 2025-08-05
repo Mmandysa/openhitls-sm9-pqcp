@@ -79,7 +79,6 @@ cd openhitls
 echo "--> 正在编译和安装 openHiTLS 的 Secure_C 平台..."
 cd platform/Secure_C
 make
-sudo make install
 cd ../.. # 返回到 openhitls 根目录
 
 echo "--> 正在编译和安装 openHiTLS 主程序..."
