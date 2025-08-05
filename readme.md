@@ -1,37 +1,39 @@
 ## **一、目录结构（暂定）**
 
+```plaintext
 SM9_PQC_KeyManagement/
 ├── CMakeLists.txt          		# CMake 构建文件（或 Makefile）
 ├── README.md               		# 项目介绍与运行说明
-├── docs/                  			# 文档资料
+├── docs/                  		# 文档资料
 │   ├── design_doc.md       		# 系统设计说明书
 │   ├── protocol_flow.png   		# 协议流程图
-│   └── performance_test.md 	# 性能测试记录
-├── scripts/                			# 辅助脚本
+│   └── performance_test.md 		# 性能测试记录
+├── scripts/                		# 辅助脚本
 │   ├── generate_keys.sh    		# 自动生成 SM9 主密钥与设备私钥
 │   └── run_demo.sh        		# 一键启动客户端/服务端演示
-├── include/                			# 头文件目录
+├── include/                		# 头文件目录
 │   ├── sm9_auth.h          		# SM9 身份认证接口
-│   ├── pqc_tls.h           			# PQC-TLS 封装接口
+│   ├── pqc_tls.h           		# PQC-TLS 封装接口
 │   ├── key_manager.h       		# 混合密钥管理逻辑
-│   └── logger.h            			# 日志模块
-├── src/                    			# 核心源代码
+│   └── logger.h            		# 日志模块
+├── src/                    		# 核心源代码
 │   ├── sm9_auth.cpp        		# SM9 身份认证实现(GmSSL)
 │   ├── pqc_tls.cpp         		# PQC-TLS 通信实现(openHiTLS-PQCP)
 │   ├── key_manager.cpp     		# 混合密钥派生、管理逻辑
 │   ├── logger.cpp          		# 日志记录模块
-│   └── utils.cpp          			# 常用工具函数（序列化/反序列化等）
-├── server/                 			# 服务端程序
+│   └── utils.cpp          		# 常用工具函数（序列化/反序列化等）
+├── server/                 		# 服务端程序
 │   ├── main.cpp            		# 服务端入口
 │   └── server_app.cpp      		# 服务端逻辑（认证+TLS握手+消息处理）
-├── client/                			# 客户端程序
+├── client/                		# 客户端程序
 │   ├── main.cpp            		# 客户端入口
 │   └── client_app.cpp      		# 客户端逻辑（发起认证+TLS通信）
-├── tests/                 			# 单元测试与功能验证
+├── tests/                 		# 单元测试与功能验证
 │   ├── test_sm9.cpp        		# 测试 SM9 签名与验签
 │   ├── test_pqc_tls.cpp    		# 测试 PQC-TLS 握手与通信
 │   └── test_integration.cpp		# 测试端到端认证与加密通信
-└── build/                  			# 编译输出目录（CMake 生成）
+└── build/                  		# 编译输出目录（CMake 生成）
+```
 
 ---
 
@@ -72,8 +74,25 @@ SM9_PQC_KeyManagement/
 
 ## **三、演示运行方式**
 
-1. **生成密钥**
-2. **启动服务端**
+1. **环境配置**
+
+   * 安装git，直接克隆本项目
+
+   ```bash
+   sudo apt update
+   sudo apt install git -y
+   git config --global user.name "username"
+   git config --global user.email "useremail"
+   git clone https://github.com/Mmandysa/openhitls-sm9-pqcp.git
+   ```
+   * 进入项目根目录，运行脚本，安装gmssl，openhitls，pqcp，并测试是否安装成功
+   ```bash
+   cd openhitls
+   sudo chmod -x ./set_env.sh
+   ./set_env.sh
+   ```
+2. **生成密钥**
+3. **启动服务端**
 
 ```bash
 ./build/server_app

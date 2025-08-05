@@ -5,11 +5,9 @@
 # ==============================================================================
 #
 #  功能:
-#  1. 更新系统并安装 Git.
-#  2. 配置 Git 用户信息 (请手动修改).
-#  3. 安装项目所需的编译工具和依赖库.
-#  4. 自动从 Gitee/GitCode 克隆、编译和安装 GmSSL, openHiTLS, PQCP.
-#  5. 配置系统动态链接库路径.
+#  1. 安装项目所需的编译工具和依赖库.
+#  2. 自动从 Gitee/GitCode 克隆、编译和安装 GmSSL, openHiTLS, PQCP.
+#  3. 配置系统动态链接库路径.
 #
 #  使用方法:
 #  1. 将此脚本放置在您的项目根目录 `openhitls_sm9_pqcp/` 下.
@@ -23,28 +21,14 @@
 # 如果任何命令执行失败，则立即退出脚本
 set -e
 
-# --- 1. Git 安装与配置 ---
-echo "--- [1/6] 正在安装并配置 Git... ---"
+# --- 1. 核心依赖安装 ---
 sudo apt update
-sudo apt install git -y
-echo "Git 安装完成，版本信息如下:"
-git --version
-
-# ******************************************************************************
-# * 重要: 请将下面的 "Your Name" 和 "useremail" 替换成您自己的 Git 用户名和邮箱 *
-# ******************************************************************************
-git config --global user.name "Your Name"
-git config --global user.email "useremail"
-echo "Git 全局用户信息已配置。"
-echo ""
-
-# --- 2. 核心依赖安装 ---
 echo "--- [2/6] 正在安装核心依赖 (gcc, cmake, make, libssl-dev, etc.)... ---"
 sudo apt install gcc cmake make libssl-dev python3-pip autoconf automake libtool -y
 echo "核心依赖安装完成。"
 echo ""
 
-# --- 检查脚本位置 ---
+# --- 2. 检查脚本位置 ---
 echo "--- [3/6] 检查当前目录结构... ---"
 if [ ! -d "third_party" ] || [ ! -d "src" ]; then
     echo "错误: 未找到 'third_party' 或 'src' 目录。"
@@ -56,7 +40,7 @@ cd third_party
 echo ""
 
 
-# --- 4. 安装 GmSSL ---
+# --- 3. 安装 GmSSL ---
 echo "--- [4/6] 正在克隆并安装 GmSSL... ---"
 git clone https://gitee.com/rootgd/GmSSL.git
 cd GmSSL
@@ -64,14 +48,13 @@ mkdir -p build
 cd build
 cmake ..
 make
-# 'make test' 会运行测试，可能会花费一些时间，默认注释掉。如果需要，可以取消注释。
-# make test
+make test
 sudo make install
 cd ../.. # 返回到 third_party 目录
 echo "GmSSL 安装完成。"
 echo ""
 
-# --- 5. 安装 openHiTLS ---
+# --- 4. 安装 openHiTLS ---
 echo "--- [5/6] 正在克隆并安装 openHiTLS... ---"
 git clone --recurse-submodules https://gitcode.com/openhitls/openhitls.git
 cd openhitls
@@ -91,7 +74,7 @@ cd ../.. # 返回到 third_party 目录
 echo "openHiTLS 安装完成。"
 echo ""
 
-# --- 6. 安装 PQCP 组件 ---
+# --- 5. 安装 PQCP 组件 ---
 echo "--- [6/6] 正在克隆并构建 PQCP 组件... ---"
 git clone https://gitcode.com/openHiTLS/pqcp.git
 
@@ -110,7 +93,7 @@ cd ../.. # 返回到 third_party 目录
 echo "PQCP 组件构建完成。"
 echo ""
 
-# --- 7. 配置动态链接库 ---
+# --- 6. 配置动态链接库 ---
 echo "--- [7/7] 正在配置系统动态链接库... ---"
 echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/local.conf > /dev/null
 sudo cp ./openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/lib/
@@ -126,3 +109,15 @@ echo "======================================================="
 
 # 返回到项目根目录
 cd ..
+
+# 7. 测试
+gcc -fdiagnostics-color=always -g \
+    -I/usr/local/include/hitls -I/usr/local/include/hitls/auth \
+    -I/usr/local/include/hitls/bsl -I/usr/local/include/hitls/crypto \
+    -I/usr/local/include/hitls/pki -I/usr/local/include/hitls/tls \
+    -L/usr/local/lib -Wl,-rpath=/usr/local/lib \
+    test.c \
+    -lhitls_crypto -lhitls_bsl -lhitls_tls -lboundscheck -lpthread \
+    -o test
+
+./test
