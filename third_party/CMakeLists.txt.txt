@@ -3,7 +3,7 @@ project(pqcp_provider C)
 
 # 新增：自定义库路径变量和 openhitls 根目录变量
 set(PQCP_LIB_DIR "" CACHE PATH "Custom library search path")
-set(OPENHITLS_ROOT /home/tys/Desktop/code/openhitls CACHE PATH "OpenHiTLS root directory")
+set(OPENHITLS_ROOT /openhitls-sm9-pqcp/third_party/openhitls CACHE PATH "OpenHiTLS root directory")
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
