@@ -8,6 +8,7 @@
 #include <gmssl/pem.h>
 #include <gmssl/error.h>
 #include <openssl/rand.h>
+#include "crypt_eal_rand.h"
 #include "cjson/cJSON.h"
 
 #define LISTEN_PORT 12345
@@ -94,11 +95,12 @@ int main() {
 
     // 5. 生成挑战 nonce
     unsigned char nonce[32];
-    if (RAND_bytes(nonce, sizeof(nonce)) != 1) {
-        fprintf(stderr, "[RSU] 生成 nonce 失败\n");
-        cJSON_Delete(root);
-        goto fail;
-    }
+
+
+    CRYPT_EAL_RandInit(CRYPT_RAND_SM4_CTR_DF, NULL, NULL, NULL, 0);
+
+    CRYPT_EAL_Randbytes(nonce, sizeof(nonce));
+    CRYPT_EAL_RandDeinit();
 
     // 发送挑战给 OBU
     send(connfd, nonce, sizeof(nonce), 0);

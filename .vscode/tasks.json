@@ -10,11 +10,20 @@
                 "${file}",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
+                "-I/usr/local/include/hitls/auth",
+                "-I/usr/local/include/hitls/bsl",
+                "-I/usr/local/include/hitls/crypto",
+                "-I/usr/local/include/hitls/pki",
                 "-L/usr/local/lib",
                 "-lgmssl",
                 "-lcjson",
                 "-lcrypto",
-                "-lssl"
+                "-lssl",
+                "-lhitls_auth",
+                "-lhitls_bsl",
+                "-lhitls_crypto",
+                "-lhitls_pki",
+                "-lpthread"
             ],
             "options": {
                 "cwd": "${fileDirname}"

@@ -6,6 +6,7 @@
 #include <gmssl/error.h>
 #include <gmssl/pem.h>
 #include <openssl/rand.h>
+#include "crypt_eal_rand.h"
 #include "cjson/cJSON.h"
 
 #define SERVER_IP "127.0.0.1"
@@ -53,7 +54,7 @@ int main() {
         close(sockfd);
         return -1;
     }
-    printf("[OBU] 与服务器%s:%d建立 TCP 连接\n", SERVER_IP, SERVER_PORT);
+    printf("[OBU] 与服务器 %s:%d 建立 TCP 连接\n", SERVER_IP, SERVER_PORT);
 
 
     // 3.发送json认证请求

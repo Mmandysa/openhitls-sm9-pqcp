@@ -14,6 +14,12 @@
         "rand.h": "c",
         "typeinfo": "c",
         "type_traits": "c",
-        "cjson.h": "c"
+        "cjson.h": "c",
+        "crypt_eal_rand.h": "c",
+        "stdbool.h": "c",
+        "bsl_base64.h": "c",
+        "evp.h": "c",
+        "bio.h": "c",
+        "ctype.h": "c"
     }
 }
