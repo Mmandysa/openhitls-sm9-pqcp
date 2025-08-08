@@ -7,10 +7,15 @@
 #include <gmssl/sm9.h>
 #include <gmssl/pem.h>
 #include <gmssl/error.h>
+#include <openssl/rand.h>
+#include "cjson/cJSON.h"
 
 #define LISTEN_PORT 12345
 #define BACKLOG 5
+#define BUFFER_SIZE 4096
 
+// gcc /home/tys/openhitls-sm9-pqcp/rsu/main_rsu.c -o /home/tys/openhitls-sm9-pqcp/rsu/main_rsu -L/usr/local/lib -lgmssl -lcjson -lcrypto -lssl
+// 加载 SM9 主公钥
 int load_sm9_master_pubkey(const char *file, SM9_SIGN_MASTER_KEY *mpk) {
     FILE *fp = fopen(file, "r");
     if (!fp) {
@@ -28,10 +33,15 @@ int load_sm9_master_pubkey(const char *file, SM9_SIGN_MASTER_KEY *mpk) {
 
 int main() {
     SM9_SIGN_MASTER_KEY mpk;
+    char buffer[BUFFER_SIZE];
+
+    // 1. 加载SM9主公钥
     if (!load_sm9_master_pubkey("sm9_sign_master_public.pem", &mpk)) {
         return -1;
     }
+    printf("[RSU] 成功加载 SM9 主公钥\n");
 
+    // 2. 创建监听套接字
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenfd < 0) { perror("socket"); return -1; }
 
@@ -51,8 +61,9 @@ int main() {
         close(listenfd);
         return -1;
     }
+    printf("[RSU] 监听端口 %d, 等待连接...\n", LISTEN_PORT);
 
-    printf("等待车辆端连接...\n");
+    // 3. 等待连接
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) {
         perror("accept");
@@ -60,48 +71,76 @@ int main() {
         return -1;
     }
 
-    // 读取ID长度 + ID
-    uint32_t id_len_net;
-    if (read(connfd, &id_len_net, sizeof(id_len_net)) <= 0) goto fail;
-    uint32_t id_len = ntohl(id_len_net);
-    if (id_len <= 0 || id_len > 1024) goto fail;
+    // 4. 接收 OBU 的认证请求(JSON)
+    int n = recv(connfd, buffer, BUFFER_SIZE - 1, 0);
+    if (n <= 0) goto fail;
+    buffer[n] = '\0';
+    printf("[RSU] 收到认证请求: %s\n", buffer);
 
-    char id[1025] = {0};
-    if (read(connfd, id, id_len) <= 0) goto fail;
-    id[id_len] = 0;
+    // 解析 JSON 获取 id
+    cJSON *root = cJSON_Parse(buffer);
+    if (!root) {
+        fprintf(stderr, "[RSU] JSON 解析失败\n");
+        goto fail;
+    }
+    cJSON *id_item = cJSON_GetObjectItem(root, "id");
+    if (!id_item || !cJSON_IsString(id_item)) {
+        fprintf(stderr, "[RSU] JSON 中缺少 id\n");
+        cJSON_Delete(root);
+        goto fail;
+    }
+    const char *id = id_item->valuestring;
+    printf("[RSU] OBU ID: %s\n", id);
 
-    // 读取签名长度 + 签名
-    uint32_t sig_len_net;
-    if (read(connfd, &sig_len_net, sizeof(sig_len_net)) <= 0) goto fail;
-    uint32_t sig_len = ntohl(sig_len_net);
-    if (sig_len <= 0 || sig_len > 512) goto fail;
-
-    uint8_t signature[512];
-    if (read(connfd, signature, sig_len) <= 0) goto fail;
-
-    printf("接收到身份请求,ID: %s\n", id);
-
-    SM9_SIGN_CTX ctx;
-    sm9_verify_init(&ctx);
-
-    // 追加消息数据
-    sm9_verify_update(&ctx, id, strlen((char *)id));
-
-    // 验证签名
-    if(sm9_verify_finish(&ctx, signature, SM9_SIGNATURE_SIZE, &mpk, id, strlen(id)))
-    {
-        printf("签名验证成功！\n");
-    } else {
-     goto fail;
+    // 5. 生成挑战 nonce
+    unsigned char nonce[32];
+    if (RAND_bytes(nonce, sizeof(nonce)) != 1) {
+        fprintf(stderr, "[RSU] 生成 nonce 失败\n");
+        cJSON_Delete(root);
+        goto fail;
     }
 
+    // 发送挑战给 OBU
+    send(connfd, nonce, sizeof(nonce), 0);
+    printf("[RSU] 发送挑战 nonce\n");
 
+    // 6. 接收 OBU 的签名
+    unsigned char signature[SM9_SIGNATURE_SIZE];
+    n = recv(connfd, signature, sizeof(signature), 0);
+    if (n != SM9_SIGNATURE_SIZE) {
+        fprintf(stderr, "[RSU] 签名长度错误\n");
+        cJSON_Delete(root);
+        goto fail;
+    }
+
+    // 构造 M = nonce || ID
+    unsigned char message[64 + 256]; // nonce(32) + id(最长256)
+    size_t msglen = 0;
+    memcpy(message, nonce, sizeof(nonce));
+    msglen += sizeof(nonce);
+    memcpy(message + msglen, id, strlen(id));
+    msglen += strlen(id);
+
+    // 7. 验证签名
+    SM9_SIGN_CTX ctx;
+    sm9_verify_init(&ctx);
+    sm9_verify_update(&ctx, message, msglen);
+
+    if (sm9_verify_finish(&ctx, signature, SM9_SIGNATURE_SIZE, &mpk, id, strlen(id)) == 1) {
+        printf("[RSU] 签名验证成功！\n");
+    } else {
+        printf("[RSU] 签名验证失败！\n");
+        cJSON_Delete(root);
+        goto fail;
+    }
+
+    cJSON_Delete(root);
     close(connfd);
     close(listenfd);
     return 0;
 
 fail:
-    perror("读取数据失败");
+    perror("[RSU] 读取数据失败");
     close(connfd);
     close(listenfd);
     return -1;

@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "error.h": "c",
+        "stdio.h": "c",
+        "stdlib.h": "c",
+        "sm9.h": "c",
+        "pem.h": "c",
+        "string.h": "c",
+        "inet.h": "c",
+        "unistd.h": "c",
+        "socket.h": "c",
+        "time.h": "c",
+        "stdint.h": "c",
+        "rand.h": "c",
+        "typeinfo": "c",
+        "type_traits": "c",
+        "cjson.h": "c"
+    }
+}

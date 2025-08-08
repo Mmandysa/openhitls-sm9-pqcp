@@ -43,5 +43,6 @@ int main() {
 
     printf("主密钥生成并保存成功！\n");
     printf("主公钥已生成并保存为 sm9_sign_master_public.pem\n");
+    
     return 0;
 }
