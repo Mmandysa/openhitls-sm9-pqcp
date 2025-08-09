@@ -51,6 +51,7 @@ int main() {
     if (!load_sm9_sign_key("sm9_user_sign_key.pem", &msk)) return -1;
     printf("[OBU] 成功加载 SM9 用户签名密钥\n");
 
+    // 创建 TCP 连接
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) { perror("socket"); return -1; }
 
@@ -62,6 +63,7 @@ int main() {
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) { perror("connect"); close(sockfd); return -1; }
     printf("[OBU] 与服务器 %s:%d 建立 TCP 连接\n", SERVER_IP, SERVER_PORT);
 
+    //===== 阶段1：sm9认证 =====
     // 1) 发送 JSON 认证请求 { "id": "..." }
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "id", OBU_ID);
