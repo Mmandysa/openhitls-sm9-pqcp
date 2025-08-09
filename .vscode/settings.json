@@ -20,6 +20,8 @@
         "bsl_base64.h": "c",
         "evp.h": "c",
         "bio.h": "c",
-        "ctype.h": "c"
+        "ctype.h": "c",
+        "sm3.h": "c",
+        "sm4.h": "c"
     }
 }
