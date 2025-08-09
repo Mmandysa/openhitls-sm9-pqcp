@@ -22,7 +22,7 @@
 #define BACKLOG 5
 #define BUFFER_SIZE 8192
 
-// Load SM9 master public key from PEM
+// 加载 SM9 主公钥
 int load_sm9_master_pubkey(const char *file, SM9_SIGN_MASTER_KEY *mpk) {
     FILE *fp = fopen(file, "r");
     if (!fp) { perror("打开SM9公钥文件失败"); return 0; }
@@ -35,7 +35,7 @@ int load_sm9_master_pubkey(const char *file, SM9_SIGN_MASTER_KEY *mpk) {
     return 1;
 }
 
-// Print hex helper
+// 打印十六进制字符串
 void print_hex(const char *title, const unsigned char *buf, size_t len) {
     printf("%s", title);
     for (size_t i = 0; i < len; i++) printf("%02x", buf[i]);
@@ -46,11 +46,13 @@ int main() {
     SM9_SIGN_MASTER_KEY mpk;
     char buffer[BUFFER_SIZE];
 
+    // 加载 SM9 主公钥
     if (!load_sm9_master_pubkey("sm9_sign_master_public.pem", &mpk)) {
         return -1;
     }
     printf("[RSU] 成功加载 SM9 主公钥\n");
 
+    // 监听端口
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     if (listenfd < 0) { perror("socket"); return -1; }
 
@@ -65,9 +67,12 @@ int main() {
     if (listen(listenfd, BACKLOG) < 0) { perror("listen"); close(listenfd); return -1; }
     printf("[RSU] 监听端口 %d, 等待连接...\n", LISTEN_PORT);
 
+    // 接受连接
     int connfd = accept(listenfd, NULL, NULL);
     if (connfd < 0) { perror("accept"); close(listenfd); return -1; }
 
+
+    // ====== 阶段1：sm9 认证 ======
     // 1) 接收 OBU 的认证请求 JSON (包含 id)
     int n = recv(connfd, buffer, BUFFER_SIZE - 1, 0);
     if (n <= 0) { perror("[RSU] recv"); close(connfd); close(listenfd); return -1; }
@@ -81,11 +86,11 @@ int main() {
     const char *id = id_item->valuestring;
     printf("[RSU] OBU ID: %s\n", id);
 
-    // 2) RSU 生成 nonce1（你原本代码里就是用 RSU 发 challenge）
+    // 2) RSU 生成 nonce1，通过challenge确保连接有效，防止重放攻击
     unsigned char nonce1[32];
     RAND_bytes(nonce1, sizeof(nonce1));
 
-    // 将 nonce1 发给 OBU（这里保持原来协议：RSU 发送挑战，OBU 用签名返回）
+    // 将 nonce1 发给 OBU
     if (send(connfd, nonce1, sizeof(nonce1), 0) != sizeof(nonce1)) {
         perror("[RSU] 发送 nonce1 失败");
         cJSON_Delete(root);
@@ -116,9 +121,9 @@ int main() {
     free(message);
 
     if (ret == 1) {
-        printf("[RSU] 签名验证成功！\n");
+        printf("[RSU] sm9 签名验证成功！\n");
     } else {
-        printf("[RSU] 签名验证失败！\n");
+        printf("[RSU] sm9 签名验证失败！\n");
         cJSON_Delete(root);
         goto fail;
     }
@@ -180,7 +185,7 @@ int main() {
     printf("[RSU] 接收到加密消息 (len=%u)\n", ciphertext_len);
     print_hex("[RSU] Ciphertext = ", ciphertext, ciphertext_len);
 
-    // SM4-CBC 解密（使用 sm4_set_decrypt_key + sm4_encrypt 用解密轮）
+    // SM4-CBC 解密
     SM4_KEY sm4_dec_key;
     sm4_set_decrypt_key(&sm4_dec_key, sm4_key);
 

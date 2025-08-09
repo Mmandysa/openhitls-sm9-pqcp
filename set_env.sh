@@ -54,46 +54,13 @@ cd ../.. # 返回到 third_party 目录
 echo "GmSSL 安装完成。"
 echo ""
 
-# --- 4. 安装 openHiTLS ---
-echo "--- [5/6] 正在克隆并安装 openHiTLS... ---"
-git clone --recurse-submodules https://gitcode.com/openhitls/openhitls.git
-cd openhitls
-
-echo "--> 正在编译和安装 openHiTLS 的 Secure_C 平台..."
-cd platform/Secure_C
-make
-cd ../.. # 返回到 openhitls 根目录
-
-echo "--> 正在编译和安装 openHiTLS 主程序..."
-mkdir -p build
-cd build
-cmake ..
-make
-sudo make install
-cd ../.. # 返回到 third_party 目录
-echo "openHiTLS 安装完成。"
-echo ""
-
-# --- 5. 安装 PQCP 组件 ---
+# --- 4. 安装 PQCP 组件 ---
 echo "--- [6/6] 正在克隆并构建 PQCP 组件... ---"
 git clone https://gitcode.com/openHiTLS/pqcp.git
-
-echo "--> 正在自动替换 PQCP 的 CMakeLists.txt 文件..."
-# 根据用户指示，从 third_party 目录将预先准备好的 CMakeLists.txt.txt
-# 复制并重命名到 pqcp 目录下，以替换其默认配置。
-# 请确保在运行此脚本前，已将名为 CMakeLists.txt.txt 的文件放置在 'third_party' 目录下。
-cp ./CMakeLists.txt.txt ./pqcp/CMakeLists.txt
-
 cd pqcp
-mkdir -p build
-cd build
-cmake ..
-make
-cd ../.. # 返回到 third_party 目录
-echo "PQCP 组件构建完成。"
-echo ""
+sudo bash ./build_pqcp.sh
 
-# --- 6. 配置动态链接库 ---
+# --- 5. 配置动态链接库 ---
 echo "--- [7/7] 正在配置系统动态链接库... ---"
 echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/local.conf > /dev/null
 sudo cp ./openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/lib/
