@@ -63,8 +63,15 @@ sudo bash ./build_pqcp.sh
 # --- 5. 配置动态链接库 ---
 echo "--- [7/7] 正在配置系统动态链接库... ---"
 echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/local.conf > /dev/null
-sudo cp ./openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/lib/
+sudo cp platform/openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/lib/
+sudo cp platform/openhitls/platform/Secure_C/lib/*.so /usr/local/lib/
+sudo mkdir -p /usr/local/include/pqcp
+sudo cp include/*.h /usr/local/include/pqcp
+sudo cp build/libpqcp_provider.so /usr/local/lib/
+sudomkdir -p /usr/local/include/hitls && \
+find third_party/pqcp/platform/openhitls/include -mindepth 1 -maxdepth 1 -type d -exec cp -r {} /usr/local/include/hitls/ \;
 sudo ldconfig
+
 echo "动态链接库配置完成。"
 echo ""
 
@@ -75,7 +82,7 @@ echo " 所有第三方库已安装在 'third_party' 目录下。"
 echo "======================================================="
 
 # 返回到项目根目录
-cd ..
+cd ../..
 
 # 7. 测试
 gcc -fdiagnostics-color=always -g \
