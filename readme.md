@@ -89,21 +89,27 @@ SM9_PQC_KeyManagement/
    * 进入项目根目录，运行脚本，安装gmssl，openhitls，pqcp，并测试是否安装成功
 
    ```bash
-   cd openhitls
+   cd openhitls-sm9-pqcp
    sudo chmod -x ./set_env.sh
    ./set_env.sh
    ```
 2. **生成密钥**
+
+   ```bash
+   ./study/demo0
+   ./study/demo1
+   # 将生成的密钥文件移动到obu和rsu
+   ```
 3. **启动服务端**
 
 ```bash
-./build/server_app
+./rsu/main_rsu
 ```
 
 3. **启动客户端**
 
 ```bash
-./build/client_app
+./obu/main_vehicle
 ```
 
 4. **观察输出**
