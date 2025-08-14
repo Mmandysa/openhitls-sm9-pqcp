@@ -22,6 +22,23 @@
         "bio.h": "c",
         "ctype.h": "c",
         "sm3.h": "c",
-        "sm4.h": "c"
-    }
+        "sm4.h": "c",
+        "pqcp_types.h": "c",
+        "pqcp_err.h": "c",
+        "pqcp_provider.h": "c",
+        "crypt_eal_provider.h": "c",
+        "bsl_params.h": "c",
+        "bsl_err.h": "c",
+        "crypt_eal_pkey.h": "c",
+        "crypt_eal_md.h": "c",
+        "crypt_errno.h": "c",
+        "pqcp_provider_impl.h": "c",
+        "bsl_sal.h": "c",
+        "bsl_types.h": "c",
+        "bsl_list.h": "c",
+        "crypt_eal_implprovider.h": "c",
+        "scloudplus_local.h": "c",
+        "crypt_eal_kdf.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }

@@ -67,6 +67,8 @@ sudo cp platform/openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/li
 sudo cp platform/openhitls/platform/Secure_C/lib/*.so /usr/local/lib/
 sudo mkdir -p /usr/local/include/pqcp
 sudo cp include/*.h /usr/local/include/pqcp
+sudo cp src/scloudplus/src/*.h /usr/local/include/pqcp/
+sudo cp src/provider/include/*.h /usr/local/include/pqcp/
 sudo cp build/libpqcp_provider.so /usr/local/lib/
 sudomkdir -p /usr/local/include/hitls && \
 find third_party/pqcp/platform/openhitls/include -mindepth 1 -maxdepth 1 -type d -exec cp -r {} /usr/local/include/hitls/ \;

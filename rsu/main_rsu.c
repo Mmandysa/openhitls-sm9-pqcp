@@ -14,6 +14,7 @@
 #include <gmssl/sm4.h>
 
 #include <openssl/rand.h>
+#include <hitls/crypto/crypt_eal_provider.h>
 
 #include "crypt_eal_rand.h"
 #include "cjson/cJSON.h"

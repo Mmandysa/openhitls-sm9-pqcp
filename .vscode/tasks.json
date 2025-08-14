@@ -14,6 +14,7 @@
                 "-I/usr/local/include/hitls/bsl",
                 "-I/usr/local/include/hitls/crypto",
                 "-I/usr/local/include/hitls/pki",
+                "-I/usr/local/include/pqcp",
                 "-L/usr/local/lib",
                 "-lgmssl",
                 "-lcjson",
@@ -23,6 +24,7 @@
                 "-lhitls_bsl",
                 "-lhitls_crypto",
                 "-lhitls_pki",
+                "-lpqcp_provider",
                 "-lpthread"
             ],
             "options": {

@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/local/include/hitls/crypto",
-                "/usr/local/include/hitls/bsl"
+                "/usr/local/include/hitls/bsl",
+                "/usr/local/include/pqcp"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
