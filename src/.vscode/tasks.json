@@ -1,0 +1,48 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "C/C++: gcc 生成活动文件",
+            "command": "/usr/bin/gcc",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "${file}",
+                "${workspaceFolder}/src/net.c",
+                "${workspaceFolder}/src/sm9_utils.c",
+                "${workspaceFolder}/src/scloud_kem.c",
+                "${workspaceFolder}/src/protocol.c",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}",
+                "-I/usr/local/include/hitls/auth",
+                "-I/usr/local/include/hitls/bsl",
+                "-I/usr/local/include/hitls/crypto",
+                "-I/usr/local/include/hitls/pki",
+                "-I/usr/local/include/pqcp",
+                "-L/usr/local/lib",
+                "-lgmssl",
+                "-lcjson",
+                "-lcrypto",
+                "-lssl",
+                "-lhitls_auth",
+                "-lhitls_bsl",
+                "-lhitls_crypto",
+                "-lhitls_pki",
+                "-lpqcp_provider",
+                "-lpthread"
+            ],
+            "options": {
+                "cwd": "${fileDirname}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "调试器生成的任务。"
+        }
+    ],
+    "version": "2.0.0"
+}

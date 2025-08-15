@@ -55,10 +55,7 @@
         "common.h": "c",
         "protocol.h": "c",
         "string": "c",
-        "string_view": "c",
-        "random": "c",
-        "socket": "c",
-        "fstream": "c"
+        "string_view": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
