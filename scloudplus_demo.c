@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include "crypto/crypt_eal_provider.h"
 #include "crypto/crypt_eal_implprovider.h"
 #include "crypto/crypt_eal_rand.h"
