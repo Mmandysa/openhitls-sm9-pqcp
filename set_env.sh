@@ -65,7 +65,6 @@ echo "--- [7/7] 正在配置系统动态链接库... ---"
 echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/local.conf > /dev/null
 sudo cp platform/openhitls/platform/Secure_C/lib/libboundscheck.so /usr/local/lib/
 sudo cp platform/openhitls/platform/Secure_C/lib/*.so /usr/local/lib/
-cd third_party/pqcp
 sudo mkdir -p /usr/local/include/pqcp
 sudo cp include/*.h /usr/local/include/pqcp
 sudo cp src/scloudplus/src/*.h /usr/local/include/pqcp/
