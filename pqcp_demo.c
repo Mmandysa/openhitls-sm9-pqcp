@@ -20,8 +20,22 @@ int main(void) {
     int32_t ret;
 
     CRYPT_EAL_LibCtx *libCtx = CRYPT_EAL_LibCtxNew();
-    CRYPT_EAL_RandInit(CRYPT_RAND_SHA256, NULL, NULL, NULL, 0);//随机数模块初始化
 
+    // if (!CRYPT_EAL_RandIsValidAlgId(CRYPT_RAND_SM4_CTR_DF )) {
+    //     printf("SM4 DRBG 不支持！\n");
+    //     return -1;
+    // }
+    // if (!CRYPT_EAL_RandIsValidAlgId(CRYPT_RAND_SM3)) {
+    //     printf("SM3 DRBG 不支持！\n");
+    //     return -1;
+    // }
+
+
+    ret=CRYPT_EAL_RandInit(CRYPT_RAND_SHA256, NULL, NULL, NULL, 0);//随机数模块初始化
+    if (ret != CRYPT_SUCCESS) {
+        printf("SM3 随机数初始化失败，错误码: %d\n", ret);
+        return -1;
+    }
 
     if (!libCtx) return -1;
     CRYPT_EAL_ProvMgrCtx *mgrCtx = NULL;
@@ -107,12 +121,12 @@ int main(void) {
     printf("Key pair generated.\n");
 
     // === 导出 A 端（OBU）的密钥对 ===
-    uint8_t *A_pk  = (uint8_t*)malloc(para.pkSize);
-    uint8_t *A_sk  = (uint8_t*)malloc(para.kemSkSize);
+    uint8_t *A_pk  = (uint8_t*)malloc(real_para ->pkSize);
+    uint8_t *A_sk  = (uint8_t*)malloc(real_para->kemSkSize);
     if (!A_pk || !A_sk) return -1;
 
-    BSL_Param getPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = A_sk, .valueLen = para.kemSkSize };
-    BSL_Param getPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = A_pk, .valueLen = para.pkSize };
+    BSL_Param getPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = A_sk, .valueLen = real_para->kemSkSize };
+    BSL_Param getPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = A_pk, .valueLen = real_para->pkSize };
 
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GETPRV) {
@@ -163,10 +177,10 @@ int main(void) {
     if (ret != PQCP_SUCCESS) { puts("B keygen failed"); return -1; }
 
     // 导出 B 的密钥（至少要导出 pk 给 A 用于封装）
-    uint8_t *B_pk = (uint8_t*)malloc(para.pkSize);
-    uint8_t *B_sk = (uint8_t*)malloc(para.kemSkSize);
-    BSL_Param BgetPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = B_sk, .valueLen = para.kemSkSize };
-    BSL_Param BgetPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = B_pk, .valueLen = para.pkSize };
+    uint8_t *B_pk = (uint8_t*)malloc(real_para->pkSize);
+    uint8_t *B_sk = (uint8_t*)malloc(real_para->kemSkSize);
+    BSL_Param BgetPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = B_sk, .valueLen =real_para->kemSkSize };
+    BSL_Param BgetPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = B_pk, .valueLen = real_para->pkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GETPRV) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(B_ctx, &BgetPrv);
@@ -202,7 +216,7 @@ int main(void) {
     }
     if (ret != PQCP_SUCCESS) { puts("ctxE set bits failed"); return -1; }
     // 设置 B 的公钥
-    BSL_Param setPubE = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = B_pk, .valueLen = para.pkSize };
+    BSL_Param setPubE = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = B_pk, .valueLen =real_para->pkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctxE, &setPubE);
@@ -211,8 +225,8 @@ int main(void) {
     }
     if (ret != PQCP_SUCCESS) { puts("ctxE set pub failed"); return -1; }
     uint8_t *ct=(uint8_t*)malloc(real_para->ctxSize) ;    // 密文
-    uint8_t *k_pqc_A = (uint8_t*)malloc(para.ss);     // A 端生成的共享密钥
-    uint32_t  kLenA = para.ss;
+    uint8_t *k_pqc_A = (uint8_t*)malloc(real_para->ss);     // A 端生成的共享密钥
+    uint32_t  kLenA = real_para->ss;
     uint32_t  ctLen = real_para->ctxSize;
     printf("ctxsize=%u ctsize=%u\n", real_para->ctxSize, ctLen);
     if (!ct) { printf("ct is NULL\n"); }
@@ -220,7 +234,7 @@ int main(void) {
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
         if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_ENCAPSULATE) {
             ret = ((int32_t(*)(void*,  uint8_t*, uint32_t*, uint8_t*, uint32_t*))
-                g_pqcpKemScloudPlus[i].func)(pkey_ctx, ct, &ctLen, k_pqc_A, &kLenA);
+                g_pqcpKemScloudPlus[i].func)(ctxE, ct, &ctLen, k_pqc_A, &kLenA);
             break;
         }
     }
@@ -253,7 +267,7 @@ int main(void) {
     if (ret != PQCP_SUCCESS) { puts("ctxD set bits failed"); return -1; }
 
     // 设置 B 的私钥
-    BSL_Param setPrvD = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = B_sk, .valueLen = para.kemSkSize };
+    BSL_Param setPrvD = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = B_sk, .valueLen =real_para->kemSkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPRV) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctxD, &setPrvD);
@@ -263,8 +277,8 @@ int main(void) {
     if (ret != PQCP_SUCCESS) { puts("ctxD set prv failed"); return -1; }
 
     // === Decaps ===
-    uint8_t *k_pqc_B = (uint8_t*)malloc(para.ss);
-    uint32_t kLenB = para.ss;
+    uint8_t *k_pqc_B = (uint8_t*)malloc(real_para->ss);
+    uint32_t kLenB = real_para->ss;
 
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
         if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_DECAPSULATE) {
