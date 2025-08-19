@@ -94,16 +94,13 @@ int main(void)
             break;
         }
     }
-    uintptr_t para_ptr_value = 0;
     if (ret != PQCP_SUCCESS) {
         printf("GET_PARA failed: %d\n", ret);
         return -1;
     }
-    memcpy(&para_ptr_value, &para, sizeof(uintptr_t));
-    SCLOUDPLUS_Para *real_para = (SCLOUDPLUS_Para *)para_ptr_value;
     printf("解析出的参数：\n"
        "  pkSize=%u\n  kemSkSize=%u\n  ctxSize=%u\n  ss=%u\n",
-       real_para->pkSize, real_para->kemSkSize, real_para->ctxSize, real_para->ss);
+       para.pkSize, para.kemSkSize, para.ctxSize, para.ss);
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GENKEY) {
             ret = ((int32_t(*)(void*))g_pqcpKeyMgmtScloudPlus[i].func)(rsu_ctx);
@@ -114,10 +111,10 @@ int main(void)
     printf("[RSU]Key pair generated.\n");
 
     // RSU导出公钥
-    uint8_t *rsu_pk = (uint8_t*)malloc(real_para->pkSize);
-    uint8_t *rsu_sk = (uint8_t*)malloc(real_para->kemSkSize);
-    BSL_Param rsu_getPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = rsu_sk, .valueLen = real_para->kemSkSize };
-    BSL_Param rsu_getPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pk, .valueLen = real_para->pkSize };
+    uint8_t *rsu_pk = (uint8_t*)malloc(para.pkSize);
+    uint8_t *rsu_sk = (uint8_t*)malloc(para.kemSkSize);
+    BSL_Param rsu_getPrv = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = rsu_sk, .valueLen = para.kemSkSize };
+    BSL_Param rsu_getPub = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pk, .valueLen = para.pkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GETPRV) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(rsu_ctx, &rsu_getPrv);
@@ -129,12 +126,12 @@ int main(void)
     if (ret != PQCP_SUCCESS) { puts("[RSU]Export keys failed"); return -1; }
     printf("[RSU]Export keys OK.\n");
     // printf("RSU公钥：\n");
-    // for (int i = 0; i < real_para->pkSize; i++) {
+    // for (int i = 0; i < para.pkSize; i++) {
     //     printf("%02x", rsu_pk[i]);
     // }
     // printf("\n");
     // printf("RSU私钥：\n");
-    // for (int i = 0; i < real_para->kemSkSize; i++) {
+    // for (int i = 0; i < para.kemSkSize; i++) {
     //     printf("%02x", rsu_sk[i]);
     // }
     // printf("\n");
@@ -159,7 +156,7 @@ int main(void)
     }
     if (ret != PQCP_SUCCESS) { puts("ctxE set bits failed"); return -1; }
     // 设置rsu的公钥
-    BSL_Param setPubE = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pk, .valueLen =real_para->pkSize };
+    BSL_Param setPubE = { .key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pk, .valueLen =para.pkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctxE, &setPubE);
@@ -167,10 +164,10 @@ int main(void)
         }
     }
     if (ret != PQCP_SUCCESS) { puts("ctxE set pub failed"); return -1; }
-    uint8_t *ct=(uint8_t*)malloc(real_para->ctxSize) ;    // 密文
-    uint8_t *k_shared_obu = (uint8_t*)malloc(real_para->ss);     // obu 端生成的共享密钥
-    uint32_t  kLenobu = real_para->ss;
-    uint32_t  ctLen = real_para->ctxSize;
+    uint8_t *ct=(uint8_t*)malloc(para.ctxSize) ;    // 密文
+    uint8_t *k_shared_obu = (uint8_t*)malloc(para.ss);     // obu 端生成的共享密钥
+    uint32_t  kLenobu = para.ss;
+    uint32_t  ctLen = para.ctxSize;
     if (!ct) { printf("ct is NULL\n"); }
     if (!k_shared_obu) { printf("k_shared_obu is NULL\n"); }
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
@@ -188,7 +185,7 @@ int main(void)
     printf("[obu]Encapsulation OK. ctLen=%u kLenobu=%u\n", ctLen, kLenobu);
 
     // =======模拟RSU端解封装========
-    BSL_Param setPrvD = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = rsu_sk, .valueLen =real_para->kemSkSize };
+    BSL_Param setPrvD = { .key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = rsu_sk, .valueLen =para.kemSkSize };
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPRV) {
             ret = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(rsu_ctx, &setPrvD);
@@ -198,8 +195,8 @@ int main(void)
     if (ret != PQCP_SUCCESS) { puts("ctxD set prv failed"); return -1; }
 
     // === Decaps ===
-    uint8_t *k_shared_rsu = (uint8_t*)malloc(real_para->ss);
-    uint32_t kLenrsu = real_para->ss;
+    uint8_t *k_shared_rsu = (uint8_t*)malloc(para.ss);
+    uint32_t kLenrsu = para.ss;
 
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
         if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_DECAPSULATE) {
@@ -241,7 +238,5 @@ int main(void)
     free(rsu_sk);
     CRYPT_EAL_LibCtxFree(libCtx);
     return 0;
-    
-
 
 }

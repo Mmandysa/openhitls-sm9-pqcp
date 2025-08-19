@@ -14,7 +14,6 @@
 #include <gmssl/sm4.h>
 #include <openssl/rand.h>
 
-#include "crypt_eal_rand.h"
 #include "cjson/cJSON.h"
 
 #define SERVER_IP "127.0.0.1"

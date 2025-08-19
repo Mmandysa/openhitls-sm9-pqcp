@@ -4,6 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
+                "/usr/local/include/hitls",
                 "/usr/local/include/hitls/crypto",
                 "/usr/local/include/hitls/bsl",
                 "/usr/local/include/pqcp"

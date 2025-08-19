@@ -58,7 +58,11 @@
         "string_view": "c",
         "random": "c",
         "socket": "c",
-        "fstream": "c"
+        "fstream": "c",
+        "crypt_algid.h": "c",
+        "compare": "c",
+        "cstdlib": "c",
+        "cstdint": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
