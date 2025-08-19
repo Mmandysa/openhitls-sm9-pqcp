@@ -62,7 +62,9 @@
         "crypt_algid.h": "c",
         "compare": "c",
         "cstdlib": "c",
-        "cstdint": "c"
+        "cstdint": "c",
+        "scloudplus.h": "c",
+        "securec.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

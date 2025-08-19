@@ -37,13 +37,14 @@ int scloud_global_init(const char *prov_path) {
 
     ret = CRYPT_EAL_RandInit(CRYPT_RAND_SHA256, NULL, NULL, NULL, 0);
     if (ret != CRYPT_SUCCESS) return APP_ERR;
-
+    printf("[SCloudPlus] random number generator initialized\n");
     return APP_OK;
 }
 
 static void* find_and_call_newctx(void) {
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_NEWCTX) {
+            printf("[SCloudPlus] new context created\n");
             return ((void*(*)(void*, int32_t))g_pqcpKeyMgmtScloudPlus[i].func)(NULL, CRYPT_PKEY_SCLOUDPLUS);
         }
     }
@@ -53,6 +54,21 @@ static void* find_and_call_newctx(void) {
 static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len) {
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_CTRL) {
+            if(cmd==PQCP_SCLOUDPLUS_KEY_BITS){
+                printf("[SCloudPlus] PQCP_SCLOUDPLUS_KEY_BITS execute\n");
+            }
+            if(cmd==PQCP_SCLOUDPLUS_GET_PARA)
+            {
+                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_PARA execute\n");
+            }
+            if(cmd==PQCP_SCLOUDPLUS_GET_CIPHERLEN)
+            {
+                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_CIPHERLEN execute\n");
+            }
+            if(cmd==PQCP_SCLOUDPLUS_GET_SECBITS)
+            {
+                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_SECBITS execute\n");
+            }
             return ((int32_t(*)(void*, int32_t, void*, uint32_t))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, cmd, val, len);
         }
     }
@@ -62,6 +78,7 @@ static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len) {
 static int32_t call_gen(void *ctx) {
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GENKEY) {
+            printf("[SCloudPlus] key pair generated\n");
             return ((int32_t(*)(void *))g_pqcpKeyMgmtScloudPlus[i].func)(ctx);
         }
     }
@@ -69,7 +86,6 @@ static int32_t call_gen(void *ctx) {
 }
 
 static int32_t call_get_pub(void *ctx, uint8_t *out, uint32_t *outlen) {
-    // 需要 param 结构；用你项目的 BSL_Param
     BSL_Param p = {0};
     p.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY;
     p.value = out;
@@ -102,9 +118,11 @@ static int32_t call_get_prv(void *ctx, uint8_t *out, uint32_t *outlen) {
 int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pub_cap, uint8_t *prv, uint32_t prv_cap) {
     if (!sc || !pub || !prv) return APP_ERR;
 
+    //创建上下文
     sc->pkey_ctx = find_and_call_newctx();
     if (!sc->pkey_ctx) return APP_ERR;
 
+    //设置安全等级
     int32_t ret = call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits));
     if (ret != 0) return APP_ERR;
 
@@ -117,6 +135,22 @@ int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pu
     uint32_t l2 = prv_cap;
     if (call_get_prv(sc->pkey_ctx, prv, &l2) != 0) return APP_ERR;
     sc->sk_len = l2;
+
+    printf("[SCloudPlus] Key generation complete. Public key length: %u, Private key length: %u\n", sc->pk_len, sc->sk_len);
+    //打印公钥（十六进制）
+    // printf("Generated Public Key: \n");
+    // for (uint32_t i = 0; i < sc->pk_len; i++) {
+    //     printf("%02x", pub[i]);
+    // }
+    // printf("\n");
+
+    // 打印私钥（十六进制）
+    // printf("Generated Private Key: \n");
+    // for (uint32_t i = 0; i < sc->sk_len; i++) {
+    //     printf("%02X ", prv[i]);
+    // }
+    // printf("\n");
+
 
     return APP_OK;
 }
@@ -148,21 +182,29 @@ int scloud_obu_encaps(SCloudCtx *sc, const uint8_t *rsu_pub, uint32_t rsu_pub_le
                       uint8_t *cipher, uint32_t *cipher_len,
                       uint8_t *k_pqc, uint32_t *k_pqc_len)
 {
-    if (!sc || !cipher || !cipher_len || !k_pqc || !k_pqc_len || !rsu_pub) return APP_ERR;
+    printf("rsu_pub_len: %u\n", rsu_pub_len);
+    if (!sc || !cipher || !cipher_len || !k_pqc || !k_pqc_len || !rsu_pub) {
+        printf("[SCloudPlus] Invalid parameters\n");
+        return APP_ERR;
+    }
     if (!sc->pkey_ctx) {
         sc->pkey_ctx = find_and_call_newctx();
         if (!sc->pkey_ctx) return APP_ERR;
     }
+    // 设置加密等级
+    uint32_t secBits = SCLOUDPLUS_SECBITS1;
+    int32_t ret = call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secBits, sizeof(secBits));
+    if (ret != 0) {
+        printf("[SCloudPlus] Set security level failed\n");
+        return APP_ERR;
+    }
     // set pub
-    BSL_Param setPub = {0};
-    setPub.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY;
-    setPub.value = (void*)rsu_pub;
-    setPub.valueLen = rsu_pub_len;
+    BSL_Param setPub = {.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pub, .valueLen = rsu_pub_len};
 
     for (int i=0; g_pqcpKeyMgmtScloudPlus[i].id!=0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
-            if (((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(sc->pkey_ctx, &setPub) != 0)
-                return APP_ERR;
+            if (((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(sc->pkey_ctx, &setPub) != 0)     
+            {printf("[SCloudPlus] Set public key failed\n");return APP_ERR;}
             break;
         }
     }
@@ -174,7 +216,7 @@ int scloud_obu_encaps(SCloudCtx *sc, const uint8_t *rsu_pub, uint32_t rsu_pub_le
 
     // 封装
     if (call_encaps(sc->pkey_ctx, cipher, cipher_len, k_pqc, k_pqc_len) != 0) return APP_ERR;
-
+    printf("[SCloudPlus] Encapsulation complete. Cipher length: %u, Shared secret length: %u\n", *cipher_len, *k_pqc_len);
     return APP_OK;
 }
 
@@ -210,7 +252,7 @@ int scloud_mix_keys_sha256(const uint8_t *k_sm9, uint32_t k_sm9_len,
                            uint8_t *k_final, uint32_t *k_final_len)
 {
     if (!k_pqc || !k_final || !k_final_len) return APP_ERR;
-    CRYPT_EAL_MdCtx *md = CRYPT_EAL_MdNewCtx(CRYPT_MD_SHA256);
+    CRYPT_EAL_MdCTX *md = CRYPT_EAL_MdNewCtx(CRYPT_MD_SHA256);
     if (!md) return APP_ERR;
     if (CRYPT_EAL_MdInit(md) != CRYPT_SUCCESS) return APP_ERR;
     if (k_sm9 && k_sm9_len) CRYPT_EAL_MdUpdate(md, k_sm9, k_sm9_len);

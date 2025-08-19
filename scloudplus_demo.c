@@ -18,8 +18,6 @@
 
 int main(void)
 {
-
-
     SCLOUDPLUS_Para para = {0};//参数存放
 
     //=======初始化=======
@@ -71,7 +69,7 @@ int main(void)
     printf("[RSU]SCLOUDPLUS context created.\n");
     // RSU生成密钥对
     //设置rsu安全等级
-    uint32_t secBits = SCLOUDPLUS_SECBITS2;
+    uint32_t secBits = SCLOUDPLUS_SECBITS1;
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_CTRL) {
             ret = ((int32_t(*)(void*, int32_t, void*, uint32_t))g_pqcpKeyMgmtScloudPlus[i].func)(rsu_ctx, 
@@ -84,8 +82,8 @@ int main(void)
         return -1;
     }
     printf("[RSU]Security bits set to %u.\n", secBits);
+
     //获取安全等级对应的参数
-    
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         //int32_t PQCP_SCLOUDPLUS_Ctrl(SCLOUDPLUS_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen)
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_CTRL) {

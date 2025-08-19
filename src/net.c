@@ -72,6 +72,7 @@ int net_send_packet(int fd, uint16_t type, const void *payload, uint32_t len) {
 }
 
 int net_recv_packet(int fd, uint16_t *type, uint8_t *payload, uint32_t *len, uint32_t cap) {
+    printf("[net_recv_packet] waiting for packet...\n");
     PacketHeader h;
     if (net_recv_all(fd, &h, sizeof(h)) != sizeof(h)) return APP_ERR;
     uint16_t t = ntohs(h.type);

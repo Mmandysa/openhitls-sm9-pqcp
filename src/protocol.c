@@ -6,9 +6,14 @@
 #include <stdio.h>
 
 static int append_transcript(SessionKeys *ks, const void *data, uint32_t len) {
-    if (ks->transcript_len + len > sizeof(ks->transcript)) return APP_ERR;
+    if (ks->transcript_len + len > sizeof(ks->transcript)) 
+    {
+        printf("ERROR:Not enough space in the transcript buffer\n");
+        return APP_ERR;
+    }
     memcpy(ks->transcript + ks->transcript_len, data, len);
     ks->transcript_len += len;
+    printf("[TRANSCRIPT] appended %u bytes, total length: %u\n", len, ks->transcript_len);
     return APP_OK;
 }
 
@@ -21,22 +26,36 @@ int protocol_rsu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
     rc = net_recv_packet(fd, &t, buf, &l, sizeof(buf));
     if (rc != APP_OK || t != MSG_HELLO) return APP_ERR;
     append_transcript(ks, &t, sizeof(t));
+    printf("[TRANSCRIPT] appended HELLO message\n");
 
     // 生成 SCloud+ 密钥对
     SCloudCtx sc = {0};
     uint8_t rsu_pub[20000] = {0}, rsu_prv[20000] = {0};
     uint32_t pub_len = sizeof(rsu_pub), prv_len = sizeof(rsu_prv);
 
-    if (scloud_rsu_keygen(&sc, SCLOUDPLUS_SECBITS2, rsu_pub, pub_len, rsu_prv, prv_len) != APP_OK)
+    if (scloud_rsu_keygen(&sc, SCLOUDPLUS_SECBITS1, rsu_pub, pub_len, rsu_prv, prv_len) != APP_OK)      
+    {
+        printf("scloud_rsu_keygen failed\n");
         return APP_ERR;
-
+    }
     // 发送 KEM 公钥
-    if (net_send_packet(fd, MSG_KEM_PUBKEY, rsu_pub, sc.pk_len) != APP_OK) return APP_ERR;
+    if (net_send_packet(fd, MSG_KEM_PUBKEY, rsu_pub, sc.pk_len) != APP_OK) 
+    {
+        printf("net_send_packet kem public failed\n");
+        return APP_ERR;
+    }
+    printf("kem public key sent\n");
+    printf("[TRANSCRIPT] appended RSU public key of length %u\n", sc.pk_len);
     append_transcript(ks, rsu_pub, sc.pk_len);
 
     // 接收 OBU 的密文
     rc = net_recv_packet(fd, &t, buf, &l, sizeof(buf));
-    if (rc != APP_OK || t != MSG_KEM_CIPHERTEXT) return APP_ERR;
+    printf("net_recv_packet kem ciphertext: rc=%d, type=%u, len=%u\n", rc, t, l);
+    if (rc != APP_OK || t != MSG_KEM_CIPHERTEXT) 
+    {
+        printf("net_recv_packet kem ciphertext failed\n");
+        return APP_ERR;
+    }
     append_transcript(ks, buf, l);
 
     // 解封得到 k_pqc
@@ -67,13 +86,27 @@ int protocol_rsu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
 
 int protocol_obu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
     // 1) 发送 HELLO
-    if (net_send_packet(fd, MSG_HELLO, "hi", 2) != APP_OK) return APP_ERR;
+    if (net_send_packet(fd, MSG_HELLO, "hi", 2) != APP_OK) 
+    {
+        printf("net_send_packet hello failed\n");
+        return APP_ERR;
+    }
     append_transcript(ks, "hi", 2);
 
     // 2) 收 RSU 公钥
     uint16_t t; uint32_t l; uint8_t buf[MAX_PAYLOAD];
-    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK || t != MSG_KEM_PUBKEY) return APP_ERR;
+    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK || t != MSG_KEM_PUBKEY) 
+    {
+        printf("net_recv_packet kem public failed\n");
+        return APP_ERR;
+    }
     append_transcript(ks, buf, l);
+    //打印 RSU 公钥
+    // printf("RSU 公钥：\n");
+    // for (int i = 0; i < l; i++) {
+    //     printf("%02x", buf[i]);
+    // }
+    // printf("\n");
 
     // 3) 封装得到密文和 k_pqc
     SCloudCtx sc = {0};
@@ -87,7 +120,7 @@ int protocol_obu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
     append_transcript(ks, ct, ct_len);
 
     // 4) OBU 对 transcript 做 SM9 签名并发给 RSU
-    if (sm9_master_init() != APP_OK) return APP_ERR; // demo：本地生成/加载
+    if (sm9_master_init() != APP_OK) return APP_ERR;
     uint8_t obu_prv[128]; uint32_t obu_prv_len = sizeof(obu_prv);
     if (sm9_issue_prv_for_id(obu_id, obu_prv, &obu_prv_len) != APP_OK) return APP_ERR;
 

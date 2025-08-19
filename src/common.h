@@ -9,10 +9,10 @@
 
 // 端口/缓冲区
 #define DEFAULT_PORT        5555
-#define MAX_PAYLOAD         4096
+#define MAX_PAYLOAD         40960
 #define ID_MAX_LEN          64
 
-// SCloud+ 安全等级（你已有的宏）
+// SCloud+ 安全等级
 #ifndef SCLOUDPLUS_SECBITS1
 #define SCLOUDPLUS_SECBITS1 128
 #endif
@@ -50,7 +50,7 @@ typedef struct {
     uint32_t k_final_len;
 
     // 用于 SM9 签名认证：transcript 缓冲（握手数据拼接）
-    uint8_t  transcript[4096];
+    uint8_t  transcript[40960];
     uint32_t transcript_len;
 } SessionKeys;
 
