@@ -13,7 +13,7 @@ int main(void) {
     printf("[OBU] connected\n");
 
     SessionKeys ks = {0};
-    if (protocol_obu_handshake(fd, "OBU-001", &ks) == APP_OK) {
+    if (protocol_obu_handshake(fd, "京A12345", &ks) == APP_OK) {
         printf("[OBU] handshake OK. k_final_len=%u\n", ks.k_final_len);
     } else {
         printf("[OBU] handshake FAILED\n");

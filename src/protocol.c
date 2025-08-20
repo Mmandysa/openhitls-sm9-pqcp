@@ -2,8 +2,12 @@
 #include "net.h"
 #include "scloud_kem.h"
 #include "sm9_utils.h"
+#include "cjson/cJSON.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <openssl/rand.h>
 
 static int append_transcript(SessionKeys *ks, const void *data, uint32_t len) {
     if (ks->transcript_len + len > sizeof(ks->transcript)) 
@@ -44,43 +48,108 @@ int protocol_rsu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
         printf("net_send_packet kem public failed\n");
         return APP_ERR;
     }
-    printf("kem public key sent\n");
-    printf("[TRANSCRIPT] appended RSU public key of length %u\n", sc.pk_len);
+    printf("[RSU]send KEM public key\n");
     append_transcript(ks, rsu_pub, sc.pk_len);
 
     // 接收 OBU 的密文
     rc = net_recv_packet(fd, &t, buf, &l, sizeof(buf));
-    printf("net_recv_packet kem ciphertext: rc=%d, type=%u, len=%u\n", rc, t, l);
-    if (rc != APP_OK || t != MSG_KEM_CIPHERTEXT) 
+    printf("[RSU]net_recv_packet kem ciphertext: type=%u, len=%u\n", t, l);
+    if (rc != APP_OK || t != MSG_KEM_CIPHERTEXT)
     {
         printf("net_recv_packet kem ciphertext failed\n");
         return APP_ERR;
     }
+    printf("[RSU]recv KEM ciphertext\n");
     append_transcript(ks, buf, l);
 
     // 解封得到 k_pqc
     ks->k_pqc_len = sizeof(ks->k_pqc);
     if (scloud_rsu_decaps(&sc, rsu_prv, sc.sk_len, buf, l, ks->k_pqc, &ks->k_pqc_len) != APP_OK)
         return APP_ERR;
-
-    // 接收 OBU 的 SM9 签名并验证
-    rc = net_recv_packet(fd, &t, buf, &l, sizeof(buf));
-    if (rc != APP_OK || t != MSG_AUTH_SIGNATURE) return APP_ERR;
-
-    // 获取 MPK
-    uint8_t mpk[128]; uint32_t mpk_len = sizeof(mpk);
-    if (sm9_get_mpk(mpk, &mpk_len) != APP_OK) return APP_ERR;
-
-    if (sm9_verify(obu_id, mpk, mpk_len, ks->transcript, ks->transcript_len, buf, l) != APP_OK)
+    printf("[RSU] decapsulation complete. Shared key length: %u\n", ks->k_pqc_len);
+    //接受认证请求
+    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK || t != MSG_AUTH_REQUEST) 
+    {
+        printf("[RSU] 接收认证请求失败\n");
         return APP_ERR;
+    }
+    printf("[RSU] recv auth request, len=%u\n", l);
+    append_transcript(ks, buf, l);
 
-    // 混合密钥（此处先用 PQC 单独作为会话密钥；等你把 SM9 KDF 接上后，改为 mix 函数）
-    ks->k_final_len = sizeof(ks->k_final);
-    if (scloud_mix_keys_sha256(NULL, 0, ks->k_pqc, ks->k_pqc_len, ks->k_final, &ks->k_final_len) != APP_OK)
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) { fprintf(stderr, "[RSU] JSON 解析失败\n"); return -1; }
+    cJSON *id_item = cJSON_GetObjectItem(root, "id");
+    if (!id_item || !cJSON_IsString(id_item)) { fprintf(stderr, "[RSU] JSON 中缺少 id\n"); cJSON_Delete(root);}
+    const char *id = id_item->valuestring;
+    printf("[RSU] OBU ID: %s\n", id);
+
+    //生成nonce1
+    uint8_t nonce1[32];
+    RAND_bytes(nonce1, sizeof(nonce1));
+    if(net_send_packet(fd, MSG_AUTH_RESPONSE, nonce1, sizeof(nonce1)) != APP_OK)
+    {
+        printf("[RSU] 发送 nonce1 失败\n");
         return APP_ERR;
+    }
+    printf("[RSU] send nonce1\n");
+    for(int i=0;i<32;i++)
+        printf("%02x",nonce1[i]);
+    printf("\n");
+    append_transcript(ks, nonce1, sizeof(nonce1));
 
-    // 回 ACK
-    if (net_send_packet(fd, MSG_AUTH_VERIFY_OK, NULL, 0) != APP_OK) return APP_ERR;
+    //接受签名
+    uint8_t signature[MAX_PAYLOAD];
+    if (net_recv_packet(fd, &t, signature, &l, sizeof(signature)) != APP_OK || t != MSG_AUTH_SIGNATURE) 
+    {
+        printf("[RSU] 接收签名失败\n");
+        return APP_ERR;
+    }
+    printf("[RSU] recv signature, len=%u\n", l);
+    append_transcript(ks, signature, l);
+    printf("[RSU] 接收到的签名Hex (前20字节): ");
+    for (int i = 0; i < (l < 20 ? l : 20); i++) {
+        printf("%02X ", signature[i]);
+    }
+    printf("\n");
+
+
+    // 验证签名
+    size_t idlen = strlen(id);
+    unsigned char *message = malloc(sizeof(nonce1) + idlen);
+    if (!message) {fprintf(stderr, "malloc failed\n"); cJSON_Delete(root);}
+    memcpy(message, nonce1, sizeof(nonce1));
+    memcpy(message + sizeof(nonce1), id, idlen);
+    size_t msglen = sizeof(nonce1) + idlen;
+
+    SM9_SIGN_MASTER_KEY mpk;
+    SM9_SIGN_CTX vctx;
+    if(load_sm9_master_pub_key(&mpk) != 1) {
+        fprintf(stderr, "[RSU] 加载 SM9 主公钥失败\n");
+        free(message);
+        return APP_ERR;
+    }
+    sm9_verify_init(&vctx);
+    sm9_verify_update(&vctx, message, msglen);
+    int ret = sm9_verify_finish(&vctx, signature, l, &mpk, id, idlen);
+    free(message);
+    if (ret == 1) {
+        printf("[RSU] sm9 签名验证成功！\n");
+    }
+
+    //验证成功之后，发送nonce2
+    unsigned char nonce2[32];
+    RAND_bytes(nonce2, sizeof(nonce2));
+    if(net_send_packet(fd, MSG_AUTH_VERIFY_OK, nonce2, sizeof(nonce2)) != APP_OK)
+    {
+        printf("[RSU] 发送 nonce2 失败\n");
+        return APP_ERR;
+    }
+    printf("[RSU] send nonce2\n");
+    append_transcript(ks, nonce2, sizeof(nonce2));
+
+    scloud_mix_keys_sm3(ks);
+    printf("[RSU] 会话密钥派生完成，k_final_len=%u\n", ks->k_final_len);
+
     return APP_OK;
 }
 
@@ -95,18 +164,12 @@ int protocol_obu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
 
     // 2) 收 RSU 公钥
     uint16_t t; uint32_t l; uint8_t buf[MAX_PAYLOAD];
-    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK || t != MSG_KEM_PUBKEY) 
+    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK) 
     {
         printf("net_recv_packet kem public failed\n");
         return APP_ERR;
     }
     append_transcript(ks, buf, l);
-    //打印 RSU 公钥
-    // printf("RSU 公钥：\n");
-    // for (int i = 0; i < l; i++) {
-    //     printf("%02x", buf[i]);
-    // }
-    // printf("\n");
 
     // 3) 封装得到密文和 k_pqc
     SCloudCtx sc = {0};
@@ -116,27 +179,94 @@ int protocol_obu_handshake(int fd, const char *obu_id, SessionKeys *ks) {
         return APP_ERR;
 
     // 发送密文
-    if (net_send_packet(fd, MSG_KEM_CIPHERTEXT, ct, ct_len) != APP_OK) return APP_ERR;
+    if (net_send_packet(fd, MSG_KEM_CIPHERTEXT, ct, ct_len) != APP_OK) 
+        return APP_ERR;
     append_transcript(ks, ct, ct_len);
 
-    // 4) OBU 对 transcript 做 SM9 签名并发给 RSU
-    if (sm9_master_init() != APP_OK) return APP_ERR;
-    uint8_t obu_prv[128]; uint32_t obu_prv_len = sizeof(obu_prv);
-    if (sm9_issue_prv_for_id(obu_id, obu_prv, &obu_prv_len) != APP_OK) return APP_ERR;
+    //加载 SM9 用户私钥
+    SM9_SIGN_KEY msk;
+    if(load_sm9_sign_key(&msk) != 1) return APP_ERR;
 
-    uint8_t sig[256]; uint32_t sig_len = sizeof(sig);
-    if (sm9_sign(obu_id, obu_prv, obu_prv_len, ks->transcript, ks->transcript_len, sig, &sig_len) != APP_OK)
-        return APP_ERR;
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "id", obu_id);
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json_str) { fprintf(stderr, "[OBU] JSON 创建失败\n"); return -1; }
 
-    if (net_send_packet(fd, MSG_AUTH_SIGNATURE, sig, sig_len) != APP_OK) return APP_ERR;
+    //发送sm9认证请求
+    if (net_send_packet(fd, MSG_AUTH_REQUEST, json_str, strlen(json_str)) != APP_OK) 
+    {
+        perror("[OBU] 发送认证请求失败");
+        free(json_str);
+        close(fd);
+        return -1;
+    }
+    append_transcript(ks, json_str, strlen(json_str));
+    free(json_str);
 
-    // 5) 等待验签通过
-    if (net_recv_packet(fd, &t, buf, &l, sizeof(buf)) != APP_OK || t != MSG_AUTH_VERIFY_OK) return APP_ERR;
+    //接收 nonce1 (32 bytes)
+    uint8_t nonce1[32];
 
-    // 6) 生成最终会话密钥（此处先仅用 PQC；等你有 SM9 KDF 再混合）
-    ks->k_final_len = sizeof(ks->k_final);
-    if (scloud_mix_keys_sha256(NULL, 0, ks->k_pqc, ks->k_pqc_len, ks->k_final, &ks->k_final_len) != APP_OK)
-        return APP_ERR;
+    if (net_recv_packet(fd, &t, nonce1, &l, sizeof(nonce1)) != APP_OK) 
+    {
+        perror("[OBU] 接收认证响应失败");
+        close(fd);
+        return -1;
+    }
+    for(int i=0;i<32;i++)
+        printf("%02x",nonce1[i]);
+    printf("\n");
+    append_transcript(ks, nonce1, sizeof(nonce1));
+
+    //构造M=nonce1||ID并签名
+    size_t idlen = strlen(obu_id);
+    unsigned char *message = malloc(32 + idlen);
+    if (!message) 
+    { 
+        fprintf(stderr, "malloc fail\n");return -1; 
+    }
+    memcpy(message, nonce1, 32);
+    memcpy(message + 32, obu_id, idlen);
+    size_t msglen = 32 + idlen;
+
+    SM9_SIGN_CTX sctx;
+    unsigned char signature[SM9_SIGNATURE_SIZE];
+    size_t siglen = sizeof(signature);
+
+    sm9_sign_init(&sctx);
+    sm9_sign_update(&sctx, message, msglen);
+    if (sm9_sign_finish(&sctx, &msk, signature, &siglen) != 1) 
+    {
+        fprintf(stderr, "[OBU] 签名失败\n"); free(message); return -1;
+    }
+    printf("[OBU] 签名完成，长度: %zu\n", siglen);
+    free(message);
+
+    printf("[OBU] 即将发送的签名Hex (前20字节): ");
+    for (int i = 0; i < (siglen < 20 ? siglen : 20); i++) {
+        printf("%02X ", signature[i]);
+    }
+    printf("\n");
+    //发送签名给 RSU
+    if (net_send_packet(fd, MSG_AUTH_SIGNATURE, signature, siglen) != APP_OK) 
+    {
+        fprintf(stderr, "[OBU] 发送签名失败\n");
+        close(fd);
+        return -1;
+    }
+    append_transcript(ks, signature, siglen);
+
+    //接收nonce2
+    uint8_t nonce2[32];
+    if (net_recv_packet(fd, &t, nonce2, &l, sizeof(nonce2)) != APP_OK || t != MSG_AUTH_VERIFY_OK) 
+    {
+        fprintf(stderr, "[OBU] 接收nonce2失败\n");
+        close(fd);
+        return -1;
+    }
+    append_transcript(ks, nonce2, sizeof(nonce2));
+
+    scloud_mix_keys_sm3(ks);
 
     return APP_OK;
 }

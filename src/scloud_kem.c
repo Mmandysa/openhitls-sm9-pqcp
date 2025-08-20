@@ -18,7 +18,8 @@
 #include "pqcp/pqcp_types.h" 
 #include "pqcp/pqcp_provider_impl.h"
 #include "scloudplus/scloudplus_local.h"
-
+#include <gmssl/sm3.h>
+#include <gmssl/sm4.h>
 
 // 全局 libCtx / provMgr
 static CRYPT_EAL_LibCtx *g_lib = NULL;
@@ -247,20 +248,26 @@ int scloud_rsu_decaps(SCloudCtx *sc, const uint8_t *rsu_prv, uint32_t rsu_prv_le
     return APP_OK;
 }
 
-int scloud_mix_keys_sha256(const uint8_t *k_sm9, uint32_t k_sm9_len,
-                           const uint8_t *k_pqc, uint32_t k_pqc_len,
-                           uint8_t *k_final, uint32_t *k_final_len)
+int scloud_mix_keys_sm3(SessionKeys *ks)
 {
-    if (!k_pqc || !k_final || !k_final_len) return APP_ERR;
-    CRYPT_EAL_MdCTX *md = CRYPT_EAL_MdNewCtx(CRYPT_MD_SHA256);
-    if (!md) return APP_ERR;
-    if (CRYPT_EAL_MdInit(md) != CRYPT_SUCCESS) return APP_ERR;
-    if (k_sm9 && k_sm9_len) CRYPT_EAL_MdUpdate(md, k_sm9, k_sm9_len);
-    CRYPT_EAL_MdUpdate(md, k_pqc, k_pqc_len);
-    uint32_t outLen = 32;
-    if (*k_final_len < outLen) return APP_ERR;
-    CRYPT_EAL_MdFinal(md, k_final, &outLen);
-    CRYPT_EAL_MdFreeCtx(md);
-    *k_final_len = outLen;
-    return APP_OK;
+    unsigned char *kdf_in = malloc(ks->transcript_len + 64);
+    if (!kdf_in) { fprintf(stderr, "malloc fail\n"); return -1; }
+    size_t off = 0;
+    memcpy(kdf_in + off, ks->k_pqc, 64); off += 64;
+    memcpy(kdf_in + off, ks->transcript, ks->transcript_len); off += ks->transcript_len;
+
+    unsigned char dgst[SM3_DIGEST_SIZE];
+    SM3_CTX sm3ctx;
+    sm3_init(&sm3ctx);
+    sm3_update(&sm3ctx, kdf_in, off);
+    sm3_finish(&sm3ctx, dgst);
+
+    free(kdf_in);
+
+    memcpy(ks->k_final, dgst, 64);
+    for (int i = 0; i < 64; i++) {
+        printf("%02x", ks->k_final[i]);
+    }
+    ks->k_final_len = 64;
+    printf("\n");
 }

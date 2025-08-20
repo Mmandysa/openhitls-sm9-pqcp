@@ -1,50 +1,123 @@
 #include "sm9_utils.h"
+#include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <stdint.h>
+#include <gmssl/sm9.h>
+#include <gmssl/pem.h>
+#include <gmssl/error.h>
+#include <gmssl/sm3.h>
+#include <gmssl/sm4.h>
+#include <openssl/rand.h>
+#include "cjson/cJSON.h"
+#define PASSWORD "obu_password"
+#define MSKPATH "sm9_sign_master_key.pem"
+#define MSPUBPATH "sm9_sign_master_public.pem"
+#define USER_PRIPATH "sm9_user_sign_key.pem"
 
-// ====== 占位实现（演示期先跑协议，后续接 GmSSL）======
-
-static uint8_t g_dummy_mpk[64] = {0xA5}; // demo
-
+//主密钥生成，保存到sm9_sign_master_key.pem
+//主公钥生成，保存到sm9_sign_master_public.pem
 int sm9_master_init(void) {
-    // 真实实现：调用 GmSSL 生成 SM9 master key（MSK/MPK），持久化 MPK/保护 MSK
-    memset(g_dummy_mpk, 0xA5, sizeof(g_dummy_mpk));
+    SM9_SIGN_MASTER_KEY master_key;
+    // 生成主密钥（ks 和 Ppubs）
+    if (sm9_sign_master_key_generate(&master_key) != 1) {
+        printf("生成主密钥失败！\n");
+        return -1;
+        //主密钥保存在masterkey
+    }
+
+    // 将主密钥保存为 PEM 文件（加密存储）
+    FILE *fp = fopen(MSKPATH, "wb");
+    if (!fp) {
+        printf("无法打开文件 %s\n", MSKPATH);
+        return -1;
+    }
+    if (sm9_sign_master_key_info_encrypt_to_pem(&master_key, PASSWORD, fp) != 1) {
+        printf("保存主密钥失败！\n");
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    // 保存主公钥
+    fp = fopen(MSPUBPATH, "wb");
+    if (!fp) {
+        printf("无法打开文件 %s\n", MSPUBPATH);
+        return -1;
+    }
+    if (sm9_sign_master_public_key_to_pem(&master_key, fp) != 1) {
+        printf("保存主公钥失败！\n");
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    printf("主密钥生成并保存为 %s\n", MSKPATH);
+    printf("主公钥已生成并保存为 %s\n", MSPUBPATH);
+
     return APP_OK;
 }
 
-int sm9_issue_prv_for_id(const char *id, uint8_t *prv_out, uint32_t *prv_len) {
-    if (!id || !prv_out || !prv_len || *prv_len < 64) return APP_ERR;
-    // 真实实现：用 MSK 对 id 做 Extract，得到用户私钥
-    memset(prv_out, 0x5A, 64);
-    *prv_len = 64;
+//用户私钥生成
+int sm9_issue_prv_for_id(const char *id) {
+    if (!id) return APP_ERR;
+
+    SM9_SIGN_MASTER_KEY master_key;
+    SM9_SIGN_KEY user_key;
+    // 从 PEM 文件加载主密钥
+    FILE *fp = fopen(MSKPATH, "rb");
+    if (sm9_sign_master_key_info_decrypt_from_pem(&master_key, PASSWORD, fp) != 1) {
+        printf("加载主密钥失败！\n");
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    // 为用户生成签名密钥
+    if (sm9_sign_master_key_extract_key(&master_key, id, strlen(id), &user_key) != 1) {
+        printf("生成用户签名密钥失败！\n");
+        return -1;
+    }
+
+    // 将用户密钥保存为 PEM 文件
+    fp = fopen(USER_PRIPATH, "wb");
+    if (sm9_sign_key_info_encrypt_to_pem(&user_key, PASSWORD, fp) != 1) {
+        printf("保存用户密钥失败！\n");
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+    printf("用户签名密钥生成并保存为 %s\n", USER_PRIPATH);
     return APP_OK;
 }
 
-int sm9_get_mpk(uint8_t *mpk_out, uint32_t *mpk_len) {
-    if (!mpk_out || !mpk_len || *mpk_len < sizeof(g_dummy_mpk)) return APP_ERR;
-    memcpy(mpk_out, g_dummy_mpk, sizeof(g_dummy_mpk));
-    *mpk_len = sizeof(g_dummy_mpk);
-    return APP_OK;
+//加载SM9用户私钥
+int load_sm9_sign_key(SM9_SIGN_KEY *key) {
+    FILE *fp = fopen(USER_PRIPATH, "r");
+    char *password = PASSWORD;
+    if (!fp) { perror("打开SM9私钥文件失败"); return 0; }
+    if (sm9_sign_key_info_decrypt_from_pem(key, password, fp) != 1) {
+        fprintf(stderr, "加载SM9私钥失败\n");
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    return 1;
 }
 
-int sm9_sign(const char *id, const uint8_t *user_prv, uint32_t prv_len,
-             const uint8_t *msg, uint32_t msg_len,
-             uint8_t *sig, uint32_t *sig_len)
-{
-    if (!id || !user_prv || !msg || !sig || !sig_len || *sig_len < 32) return APP_ERR;
-    // 真实实现：SM9 签名（GmSSL）
-    // 占位：输出 32 字节“签名”
-    memset(sig, 0x3C, 32);
-    *sig_len = 32;
-    return APP_OK;
+//加载SM9主公钥
+int load_sm9_master_pub_key(SM9_SIGN_MASTER_KEY *mpk) {
+    FILE *fp = fopen(MSPUBPATH, "r");
+    if (!fp) { perror("打开SM9主公钥文件失败"); return 0; }
+    if (sm9_sign_master_public_key_from_pem(mpk, fp) != 1) {
+        fprintf(stderr, "加载SM9主公钥失败\n");
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    return 1;
 }
 
-int sm9_verify(const char *id, const uint8_t *mpk, uint32_t mpk_len,
-               const uint8_t *msg, uint32_t msg_len,
-               const uint8_t *sig, uint32_t sig_len)
-{
-    if (!id || !mpk || !msg || !sig) return APP_ERR;
-    // 真实实现：SM9 验签（GmSSL）
-    // 占位：总返回成功
-    return APP_OK;
-}
 

@@ -27,9 +27,7 @@ int scloud_rsu_decaps(SCloudCtx *sc, const uint8_t *rsu_prv, uint32_t rsu_prv_le
                       const uint8_t *cipher, uint32_t cipher_len,
                       uint8_t *k_pqc, uint32_t *k_pqc_len);
 
-// 混合密钥：H(k_sm9 || k_pqc) -> k_final（示例用 SHA256）
-int scloud_mix_keys_sha256(const uint8_t *k_sm9, uint32_t k_sm9_len,
-                           const uint8_t *k_pqc, uint32_t k_pqc_len,
-                           uint8_t *k_final, uint32_t *k_final_len);
+// 混合密钥：H(k_sm9 || k_pqc) -> k_final（示例用 SM3）
+int scloud_mix_keys_sm3(SessionKeys *ks);
 
 #endif

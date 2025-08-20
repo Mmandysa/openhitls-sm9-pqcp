@@ -17,7 +17,7 @@ int main(void) {
     printf("[RSU] client connected\n");
 
     SessionKeys ks = {0};
-    if (protocol_rsu_handshake(cfd, "OBU-001", &ks) == APP_OK) {
+    if (protocol_rsu_handshake(cfd, "京A12345", &ks) == APP_OK) {
         printf("[RSU] handshake OK. k_final_len=%u\n", ks.k_final_len);
     } else {
         printf("[RSU] handshake FAILED\n");

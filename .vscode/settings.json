@@ -64,7 +64,9 @@
         "cstdlib": "c",
         "cstdint": "c",
         "scloudplus.h": "c",
-        "securec.h": "c"
+        "securec.h": "c",
+        "oid.h": "c",
+        "pkcs8.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

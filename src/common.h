@@ -30,7 +30,9 @@ typedef enum {
     MSG_KEM_CIPHERTEXT,     // OBU -> RSU (SCloud+ 密文)
     MSG_AUTH_SIGNATURE,     // 双方做 SM9 身份认证（OBU->RSU）
     MSG_AUTH_VERIFY_OK,     // RSU -> OBU
-    MSG_DATA_SEC            // 加密业务数据
+    MSG_DATA_SEC,           // 加密业务数据
+    MSG_AUTH_REQUEST,       // OBU -> RSU (认证请求)
+    MSG_AUTH_RESPONSE       // RSU -> OBU (认证响应)(挑战nonce)
 } MsgType;
 
 // 定长包头

@@ -89,3 +89,38 @@ int net_recv_packet(int fd, uint16_t *type, uint8_t *payload, uint32_t *len, uin
 void net_close(int fd) {
     if (fd >= 0) close(fd);
 }
+
+void print_packet_info(const PacketHeader *header) {
+    if (!header) return;
+    uint16_t type = ntohs(header->type);
+    switch (type)
+    {
+        case MSG_HELLO:
+            printf("HELLO\n");
+            break;
+        case MSG_KEM_PUBKEY:
+            printf("KEM_PUBKEY\n");
+            break;
+        case MSG_KEM_CIPHERTEXT:
+            printf("KEM_CIPHERTEXT\n");
+            break;
+        case MSG_AUTH_SIGNATURE:
+            printf("AUTH_SIGNATURE\n");
+            break;
+        case MSG_AUTH_VERIFY_OK:
+            printf("AUTH_VERIFY_OK\n");
+            break;
+        case MSG_DATA_SEC:
+            printf("DATA_SEC\n");
+            break;
+        case MSG_AUTH_REQUEST:
+            printf("AUTH_REQUEST\n");
+            break;
+        case MSG_AUTH_RESPONSE:
+            printf("AUTH_RESPONSE\n");
+            break;
+        default:
+            break;
+    }
+    printf("Payload Length: %u\n", ntohl(header->len));
+}
