@@ -2,37 +2,22 @@
 
 ```plaintext
 SM9_PQC_KeyManagement/
-├── CMakeLists.txt          		# CMake 构建文件（或 Makefile）
 ├── README.md               		# 项目介绍与运行说明
-├── docs/                  		# 文档资料
-│   ├── design_doc.md       		# 系统设计说明书
-│   ├── protocol_flow.png   		# 协议流程图
-│   └── performance_test.md 		# 性能测试记录
-├── scripts/                		# 辅助脚本
-│   ├── generate_keys.sh    		# 自动生成 SM9 主密钥与设备私钥
-│   └── run_demo.sh        		# 一键启动客户端/服务端演示
-├── include/                		# 头文件目录
-│   ├── sm9_auth.h          		# SM9 身份认证接口
-│   ├── pqc_tls.h           		# PQC-TLS 封装接口
-│   ├── key_manager.h       		# 混合密钥管理逻辑
-│   └── logger.h            		# 日志模块
 ├── src/                    		# 核心源代码
-│   ├── sm9_auth.cpp        		# SM9 身份认证实现(GmSSL)
-│   ├── pqc_tls.cpp         		# PQC-TLS 通信实现(openHiTLS-PQCP)
-│   ├── key_manager.cpp     		# 混合密钥派生、管理逻辑
-│   ├── logger.cpp          		# 日志记录模块
-│   └── utils.cpp          		# 常用工具函数（序列化/反序列化等）
-├── server/                 		# 服务端程序
-│   ├── main.cpp            		# 服务端入口
-│   └── server_app.cpp      		# 服务端逻辑（认证+TLS握手+消息处理）
-├── client/                		# 客户端程序
-│   ├── main.cpp            		# 客户端入口
-│   └── client_app.cpp      		# 客户端逻辑（发起认证+TLS通信）
-├── tests/                 		# 单元测试与功能验证
-│   ├── test_sm9.cpp        		# 测试 SM9 签名与验签
-│   ├── test_pqc_tls.cpp    		# 测试 PQC-TLS 握手与通信
-│   └── test_integration.cpp		# 测试端到端认证与加密通信
-└── build/                  		# 编译输出目录（CMake 生成）
+│   ├── obu.c
+│   ├── rsu.c
+│   ├── scloud_kem.h             #pqcp的scloud_kem密钥协商实现
+│   ├── scloud_kem.c
+│   ├── sm9_utils.h              #sm9部分封装
+│   ├── sm9_utils.c
+│   ├── net.h                    #网络通信模块
+│   |── net.c
+│   ├── protocol.h               #握手协议
+│   ├── protocol.c
+│   └── common.h                 #结构类型定义
+├── study/                       #一些开发过程中的demo
+
+
 ```
 
 ---
@@ -40,35 +25,32 @@ SM9_PQC_KeyManagement/
 ## **二、模块说明**
 
 1. **SM9 身份认证模块**
-   * `src/sm9_auth.cpp` + `include/sm9_auth.h`
+   * `src/sm9_utils.c` + `src/sm9_utils.h`
    * 功能：
      * 生成 SM9 主密钥、派生用户私钥
      * 挑战-响应签名认证逻辑
      * 调用 **GmSSL** 完成签名与验签
-2. **PQC-TLS 通信模块**
-   * `src/pqc_tls.cpp` + `include/pqc_tls.h`
+2. **TCP 通信模块**
+   * `src/net.c` + `src/net.h`
    * 功能：
-     * 封装 **openHiTLS-PQCP** 接口
-     * 建立 TLS 1.3 会话（Kyber、Dilithium 等套件）
-     * 发送/接收加密数据
-3. **混合密钥管理模块**
-   * `src/key_manager.cpp` + `include/key_manager.h`
+     * 封装 **TCP** 接口
+     * 发送/接收加密数据包
+3. **PQCP密钥模块**
+   * `src/scloud_kem.c` + `src/scloud_kem.h`
    * 功能：
-     * 协调 SM9 认证和 PQC 会话
-     * 可选 HKDF-SHA3 派生统一会话密钥
-     * 管理会话密钥生命周期
-4. **客户端与服务端逻辑**
-   * `client/` 与 `server/`
+     * 使用scloud_kem协商秘钥
+4. **协议模块**
+   * `src/protocol.c` 与 `src/protocol.c`
    * 功能：
      * 建立 TCP 连接
      * 执行 SM9 认证流程
-     * 切换至 PQC-TLS 加密通信
-     * 演示发送加密消息
-5. **测试与演示**
-   * `tests/`
-   * 测试 SM9 和 PQC 独立功能
-   * 测试端到端认证与加密传输
-   * 可输出性能数据（延迟、带宽、CPU 占用）
+     * 协商 PQC 秘钥
+     * 得到混合秘钥
+5. **~~测试与演示~~**
+   * ~~`tests/`~~
+   * ~~测试 SM9 和 PQC 独立功能~~
+   * ~~测试端到端认证与加密传输~~
+   * ~~可输出性能数据（延迟、带宽、CPU 占用）~~
 
 ---
 
@@ -93,7 +75,7 @@ SM9_PQC_KeyManagement/
    sudo chmod -x ./set_env.sh
    ./set_env.sh
    ```
-2. **生成密钥**
+2. **生成密钥（目前我已经生成好了，此步略去）**
 
    ```bash
    ./study/demo0
@@ -102,15 +84,21 @@ SM9_PQC_KeyManagement/
    ```
 3. **启动服务端**
 
-```bash
-./rsu/main_rsu
-```
+   * 项目根目录下编译，运行
+   ```bash
+   /usr/bin/gcc -fdiagnostics-color=always -g src/rsu.c src/net.c src/protocol.c src/scloud_kem.c src/sm9_utils.c -o /home/tys/openhitls-sm9-pqcp/src/rsu -I/usr/local/include -I/usr/local/include/gmssl -I/usr/local/include/hitls -I/usr/local/include/hitls/auth -I/usr/local/include/hitls/bsl -I/usr/local/include/hitls/crypto -I/usr/local/include/hitls/pki -I/usr/local/include/pqcp -L/usr/local/lib -lgmssl -lcjson -lcrypto -lssl -lhitls_auth -lhitls_bsl -lhitls_crypto -lhitls_pki -lpqcp_provider -lpthread
+
+   ./src/rsu
+   ```
 
 3. **启动客户端**
 
-```bash
-./obu/main_vehicle
-```
+   * 项目根目录下编译，运行
+   ```bash
+   /usr/bin/gcc -fdiagnostics-color=always -g src/obu.c src/net.c src/protocol.c src/scloud_kem.c src/sm9_utils.c -o /home/tys/openhitls-sm9-pqcp/src/obu -I/usr/local/include -I/usr/local/include/gmssl -I/usr/local/include/hitls -I/usr/local/include/hitls/auth -I/usr/local/include/hitls/bsl -I/usr/local/include/hitls/crypto -I/usr/local/include/hitls/pki -I/usr/local/include/pqcp -L/usr/local/lib -lgmssl -lcjson -lcrypto -lssl -lhitls_auth -lhitls_bsl -lhitls_crypto -lhitls_pki -lpqcp_provider -lpthread
+
+   ./src/obu
+   ```
 
 4. **观察输出**
 
@@ -201,8 +189,6 @@ SM9_PQC_KeyManagement/
 * 模拟完整的密钥下发 / 数据上报 / 策略下发流程
 * 每个模块运行在独立进程或线程中，互相通信（Socket/消息队列）
 * 采用 SM9 + PQC 混合机制保护通信内容
-
-
 
 1."hi"
 

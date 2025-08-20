@@ -29,6 +29,7 @@ echo "核心依赖安装完成。"
 echo ""
 
 # --- 2. 检查脚本位置 ---
+sudo mkdir third_party
 echo "--- [2/5] 检查当前目录结构... ---"
 if [ ! -d "third_party" ] || [ ! -d "src" ]; then
     echo "错误: 未找到 'third_party' 或 'src' 目录。"
@@ -66,9 +67,9 @@ cd ..
 # --- 5. 配置动态链接库 ---
 echo "--- [5/5] 正在配置系统动态链接库... ---"
 echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/local.conf > /dev/null
-sudo cp platform/openhitls/platform/Secure_C/lib/*.so /usr/local/lib/
-sudo mkdir -p /usr/local/include/pqcp && sudo cp include/*.h /usr/local/include/pqcp &&sudo cp src/provider/*.h /usr/local/include/pqcp
-sudo mkdir -p /usr/local/include/scloudplus &&sudo cp src/scloudplus/src/*.h /usr/local/include/scloudplus/ &&sudo cp src/scloudplus/include/*.h /usr/local/include/scloudplus/
+sudo cp platform/openhitls/platform/Secure_C/lib/*.so /usr/local/lib/ # 复制 Secure_C 库
+sudo mkdir -p /usr/local/include/pqcp && sudo cp include/*.h /usr/local/include/pqcp/ && sudo cp src/provider/*.h /usr/local/include/pqcp/ 
+sudo mkdir -p /usr/local/include/scloudplus && sudo cp src/scloudplus/src/*.h /usr/local/include/scloudplus/ && sudo cp src/scloudplus/include/*.h /usr/local/include/scloudplus/
 sudo cp build/libpqcp_provider.so /usr/local/lib/
 sudo ldconfig
 
