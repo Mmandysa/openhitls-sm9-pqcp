@@ -253,7 +253,7 @@ int scloud_mix_keys_sm3(SessionKeys *ks)
     unsigned char *kdf_in = malloc(ks->transcript_len + 64);
     if (!kdf_in) { fprintf(stderr, "malloc fail\n"); return -1; }
     size_t off = 0;
-    memcpy(kdf_in + off, ks->k_pqc, 64); off += 64;
+    memcpy(kdf_in + off, ks->k_pqc, ks->k_pqc_len); off += ks->k_pqc_len;
     memcpy(kdf_in + off, ks->transcript, ks->transcript_len); off += ks->transcript_len;
 
     unsigned char dgst[SM3_DIGEST_SIZE];
@@ -264,10 +264,11 @@ int scloud_mix_keys_sm3(SessionKeys *ks)
 
     free(kdf_in);
 
-    memcpy(ks->k_final, dgst, 64);
-    for (int i = 0; i < 64; i++) {
+    memcpy(ks->k_final, dgst,SM3_DIGEST_SIZE);
+    printf("[SUCCESS]k_final: ");
+    ks->k_final_len = SM3_DIGEST_SIZE;
+    for (int i = 0; i < ks->k_final_len; i++) {
         printf("%02x", ks->k_final[i]);
     }
-    ks->k_final_len = 64;
     printf("\n");
 }

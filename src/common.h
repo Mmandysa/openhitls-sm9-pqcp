@@ -45,10 +45,10 @@ typedef struct {
 
 // 简单会话状态
 typedef struct {
-    uint8_t  k_pqc[64];       // 从 SCloud+ 派生的共享密钥（示例放够大）
+    uint8_t  k_pqc[16];       // 从 SCloud+ 派生的共享密钥（示例放够大）
     uint32_t k_pqc_len;
 
-    uint8_t  k_final[64];     // 混合后的会话密钥（SM9||PQC 后 hash）
+    uint8_t  k_final[32];     // 混合后的会话密钥（SM9||PQC 后 hash）
     uint32_t k_final_len;
 
     // 用于 SM9 签名认证：transcript 缓冲（握手数据拼接）
