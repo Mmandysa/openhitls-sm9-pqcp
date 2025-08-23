@@ -6,7 +6,7 @@
 
 int main() {
     SM9_SIGN_KEY user_key;
-    const char *user_password = "user_password";
+    const char *user_password = "obu_password";
     const uint8_t message[] = "Hello, SM9!"; // 待签名的消息
     uint8_t sig[SM9_SIGNATURE_SIZE];         // 签名缓冲区
     size_t siglen;

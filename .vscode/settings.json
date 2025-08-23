@@ -66,7 +66,12 @@
         "scloudplus.h": "c",
         "securec.h": "c",
         "oid.h": "c",
-        "pkcs8.h": "c"
+        "pkcs8.h": "c",
+        "thread": "c",
+        "bn.h": "c",
+        "io_context": "c",
+        "executor": "c",
+        "internet": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

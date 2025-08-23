@@ -1,6 +1,8 @@
 #include "net.h"
 #include "common.h"
 #include <string.h>
+#include <stddef.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -91,6 +93,7 @@ void net_close(int fd) {
 }
 
 void print_packet_info(const PacketHeader *header) {
+
     if (!header) return;
     uint16_t type = ntohs(header->type);
     switch (type)
@@ -123,4 +126,14 @@ void print_packet_info(const PacketHeader *header) {
             break;
     }
     printf("Payload Length: %u\n", ntohl(header->len));
+}
+
+//根据当前时间获取ISO 8601格式的时间戳
+void get_iso8601_timestamp(char *buffer, size_t buffer_size) {
+    time_t now;
+    struct tm *utc_time;
+    time(&now);
+    utc_time = gmtime(&now);
+    // 按照ISO 8601格式进行格式化
+    strftime(buffer, buffer_size, "%Y-%m-%dT%H:%M:%SZ", utc_time);
 }
