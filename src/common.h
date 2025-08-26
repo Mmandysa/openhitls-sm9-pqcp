@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <gmssl/sm9.h>
+#include <gmssl/sm2.h>
 
 #define APP_OK              0
 #define APP_ERR            -1
@@ -54,6 +56,12 @@ typedef struct {
     // 用于 SM9 签名认证：transcript 缓冲（握手数据拼接）
     uint8_t  transcript[40960];
     uint32_t transcript_len;
+
+    // 新增：用于存放 SM9 密钥交换的结果
+    uint8_t k_sm9[32]; // 假设期望的密钥长度是32字节 (SM3哈希长度)
+    uint32_t k_sm9_len;
+    // 新增：用于OBU在握手步骤之间临时保存 rA
+    sm9_z256_t temp_rA;
 } SessionKeys;
 
 #endif // COMMON_H

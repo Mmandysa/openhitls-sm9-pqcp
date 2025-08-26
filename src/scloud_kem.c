@@ -248,27 +248,58 @@ int scloud_rsu_decaps(SCloudCtx *sc, const uint8_t *rsu_prv, uint32_t rsu_prv_le
     return APP_OK;
 }
 
+#include <gmssl/sm3.h> // 确保包含了sm3头文件
+
+// *** 修改后的 scloud_mix_keys_sm3 函数 ***
 int scloud_mix_keys_sm3(SessionKeys *ks)
 {
-    unsigned char *kdf_in = malloc(ks->transcript_len + 64);
-    if (!kdf_in) { fprintf(stderr, "malloc fail\n"); return -1; }
+    // +++ 新增开始 +++
+    // 安全检查：确保两个密钥都已生成，否则这是一个严重的安全问题
+    if (ks->k_sm9_len == 0 || ks->k_pqc_len == 0) {
+        fprintf(stderr, "SECURITY ERROR: One of the shared keys (k_sm9 or k_pqc) has not been generated!\n");
+        fprintf(stderr, "k_sm9_len = %u, k_pqc_len = %u\n", ks->k_sm9_len, ks->k_pqc_len);
+        // 为安全起见，将最终密钥清零并返回错误
+        memset(ks->k_final, 0, sizeof(ks->k_final));
+        ks->k_final_len = 0;
+        return -1; // 返回错误码
+    }
+    printf("Mixing k_sm9 (len=%u) and k_pqc (len=%u)\n", ks->k_sm9_len, ks->k_pqc_len);
+    // +++ 新增结束 +++
+
+    // *** 修改 ***
+    // 缓冲区大小需要同时容纳 k_sm9, k_pqc 和 transcript
+    size_t kdf_in_len = ks->k_sm9_len + ks->k_pqc_len + ks->transcript_len;
+    unsigned char *kdf_in = malloc(kdf_in_len);
+    if (!kdf_in) { 
+        fprintf(stderr, "malloc fail\n"); 
+        return -1; 
+    }
+
     size_t off = 0;
-    memcpy(kdf_in + off, ks->k_pqc, ks->k_pqc_len); off += ks->k_pqc_len;
+    // --- 保持原有逻辑，但增加了 k_sm9 ---
+    // 推荐的拼接顺序是 k_sm9 || k_pqc || transcript
+    memcpy(kdf_in + off, ks->k_sm9, ks->k_sm9_len);       off += ks->k_sm9_len; // +++ 新增 +++
+    memcpy(kdf_in + off, ks->k_pqc, ks->k_pqc_len);       off += ks->k_pqc_len;
     memcpy(kdf_in + off, ks->transcript, ks->transcript_len); off += ks->transcript_len;
 
+    // --- 哈希计算逻辑保持不变 ---
     unsigned char dgst[SM3_DIGEST_SIZE];
     SM3_CTX sm3ctx;
     sm3_init(&sm3ctx);
-    sm3_update(&sm3ctx, kdf_in, off);
+    sm3_update(&sm3ctx, kdf_in, off); // off 现在是所有材料的总长度
     sm3_finish(&sm3ctx, dgst);
 
     free(kdf_in);
 
-    memcpy(ks->k_final, dgst,SM3_DIGEST_SIZE);
-    printf("[SUCCESS]k_final: ");
+    // --- 结果拷贝和打印逻辑保持不变 ---
+    memcpy(ks->k_final, dgst, SM3_DIGEST_SIZE);
     ks->k_final_len = SM3_DIGEST_SIZE;
+
+    printf("[SUCCESS] Mixed k_final: ");
     for (int i = 0; i < ks->k_final_len; i++) {
         printf("%02x", ks->k_final[i]);
     }
     printf("\n");
+
+    return 0; // 返回成功码
 }

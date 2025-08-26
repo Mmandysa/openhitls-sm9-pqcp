@@ -71,7 +71,10 @@
         "bn.h": "c",
         "io_context": "c",
         "executor": "c",
-        "internet": "c"
+        "internet": "c",
+        "sm2.h": "c",
+        "asn1.h": "c",
+        "mem.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }

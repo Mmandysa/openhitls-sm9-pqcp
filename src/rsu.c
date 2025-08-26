@@ -4,6 +4,9 @@
 #include <stdio.h>
 
 int main(void) {
+    const char *rsu_exch_id = "RSU_001";
+    const char *expected_obu_sign_id = "琼B12345";
+    const char *expected_obu_exch_id = "琼B12345";
     if (scloud_global_init("/usr/local/lib") != APP_OK) {
         fprintf(stderr, "PQCP provider init failed\n"); return -1;
     }
@@ -17,7 +20,7 @@ int main(void) {
     printf("[RSU] client connected\n");
 
     SessionKeys ks = {0};
-    if (protocol_rsu_handshake(cfd, "京A12345", &ks) == APP_OK) {
+    if (protocol_rsu_handshake(cfd, expected_obu_sign_id, expected_obu_exch_id, rsu_exch_id, &ks) == APP_OK) {
         printf("[RSU] handshake OK. k_final_len=%u\n", ks.k_final_len);
     } else {
         printf("[RSU] handshake FAILED\n");

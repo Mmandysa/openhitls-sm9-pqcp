@@ -1,5 +1,31 @@
 {
+    "version": "2.0.0",
     "tasks": [
+        {
+            "label": "Build setup_keys",
+            "type": "shell",
+            "command": "/usr/bin/gcc",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "${workspaceFolder}/src/setup_keys.c",
+                "${workspaceFolder}/src/sm9_utils.c",
+                "-o",
+                "${workspaceFolder}/setup_keys",
+                "-I/usr/local/include",
+                "-I/usr/local/include/gmssl",
+                "-L/usr/local/lib",
+                "-lgmssl",
+                "-lcjson",
+                "-lcrypto",
+                "-lssl"
+            ],
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "detail": "Compiler for the key generation utility"
+        },
         {
             "type": "cppbuild",
             "label": "C/C++: gcc 生成活动文件",
@@ -9,26 +35,7 @@
                 "-g",
                 "${file}",
                 "-o",
-                "${fileDirname}/${fileBasenameNoExtension}",
-                "-I/usr/local/include",
-                "-I/usr/local/include/gmssl",
-                "-I/usr/local/include/hitls",
-                "-I/usr/local/include/hitls/auth",
-                "-I/usr/local/include/hitls/bsl",
-                "-I/usr/local/include/hitls/crypto",
-                "-I/usr/local/include/hitls/pki",
-                "-I/usr/local/include/pqcp",
-                "-L/usr/local/lib",
-                "-lgmssl",
-                "-lcjson",
-                "-lcrypto",
-                "-lssl",
-                "-lhitls_auth",
-                "-lhitls_bsl",
-                "-lhitls_crypto",
-                "-lhitls_pki",
-                "-lpqcp_provider",
-                "-lpthread"
+                "${fileDirname}/${fileBasenameNoExtension}"
             ],
             "options": {
                 "cwd": "${fileDirname}"
@@ -42,6 +49,5 @@
             },
             "detail": "调试器生成的任务。"
         }
-    ],
-    "version": "2.0.0"
+    ]
 }
