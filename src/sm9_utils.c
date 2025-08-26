@@ -16,15 +16,6 @@
 #include <gmssl/mem.h>
 #include <gmssl/sm9_z256.h>
 #define PASSWORD "obu_password"
-#define SIGN_MSK_PATH     "sm9_sign_master_key.pem"
-#define SIGN_MPK_PATH     "sm9_sign_master_public.pem"
-#define OBU_SIGN_KEY_PATH "sm9_obu_sign_key.pem"
-
-// --- 新增：加密/交换密钥文件 ---
-#define ENC_MSK_PATH "sm9_enc_master_key.pem"
-#define ENC_MPK_PATH "sm9_enc_master_public.pem"
-#define OBU_ENC_KEY_PATH "sm9_obu_enc_key.pem"
-#define RSU_ENC_KEY_PATH "sm9_rsu_enc_key.pem"
 
 
 int sm9_master_init(void) {
@@ -233,36 +224,15 @@ int sm9_issue_enc_prv_for_id(const char *id, const char* filepath) {
     return APP_OK;
 }
 
-// +++ 新增 +++ 为OBU和RSU创建两个独立的加载函数
-#define OBU_ENC_KEY_PATH "sm9_obu_enc_key.pem"
-#define RSU_ENC_KEY_PATH "sm9_rsu_enc_key.pem"
-
-// OBU 加载自己的交换私钥
-int load_sm9_enc_key_for_obu(SM9_ENC_KEY *key) {
-    FILE *fp = fopen(OBU_ENC_KEY_PATH, "r");
+// 加载自己的交换私钥
+int load_sm9_enc_key(SM9_ENC_KEY *key,char *filepath) {
+    FILE *fp = fopen(filepath, "r");
     if (!fp) {
-        perror("ERROR: Failed to open OBU's enc user key file");
+        perror("ERROR: Failed to open enc user key file");
         return 0;
     }
     if (sm9_enc_key_info_decrypt_from_pem(key, PASSWORD, fp) != 1) {
         fprintf(stderr, "ERROR: Failed to load OBU's enc user key!\n");
-        error_print();
-        fclose(fp);
-        return 0;
-    }
-    fclose(fp);
-    return 1;
-}
-
-// RSU 加载自己的交换私钥
-int load_sm9_enc_key_for_rsu(SM9_ENC_KEY *key) {
-    FILE *fp = fopen(RSU_ENC_KEY_PATH, "r");
-    if (!fp) {
-        perror("ERROR: Failed to open RSU's enc user key file");
-        return 0;
-    }
-    if (sm9_enc_key_info_decrypt_from_pem(key, PASSWORD, fp) != 1) {
-        fprintf(stderr, "ERROR: Failed to load RSU's enc user key!\n");
         error_print();
         fclose(fp);
         return 0;

@@ -22,9 +22,6 @@ int main() {
         fprintf(stderr, "Failed to issue SIGN key for OBU.\n");
         return -1;
     }
-    // TODO: 将来如果想让RSU也签名，可以在这里为RSU颁发签名私钥
-    // sm9_issue_prv_for_id("RSU_001", "sm9_rsu_sign_key.pem");
-
 
     // ===== 阶段二：生成加密/交换 (ENCRYPTION/EXCHANGE) 相关的密钥 =====
     printf("\n===== Generating SM9 ENCRYPTION/EXCHANGE Keys =====\n");

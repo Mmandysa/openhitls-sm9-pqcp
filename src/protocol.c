@@ -42,7 +42,7 @@ int protocol_rsu_handshake(int fd, const char *expected_obu_sign_id, const char 
     
     // 调用为RSU专设的加载函数
     SM9_ENC_KEY rsu_exch_key;
-    if (!load_sm9_enc_key_for_rsu(&rsu_exch_key)) return APP_ERR; 
+    if (!load_sm9_enc_key(&rsu_exch_key, RSU_ENC_KEY_PATH)) return APP_ERR;
 
     // 3. 解析并验证ClientHello
     SM9_Z256_POINT RA;
@@ -116,8 +116,8 @@ int protocol_obu_handshake(int fd, const char *sign_id, const char *exch_id, con
     // 2. 加载KEX所需的密钥
     // *** 关键修改 *** 调用为OBU专设的加载函数
     SM9_ENC_KEY exch_key;
-    if (!load_sm9_enc_key_for_obu(&exch_key)) return APP_ERR;
-    
+    if (!load_sm9_enc_key(&exch_key, OBU_ENC_KEY_PATH)) return APP_ERR;
+
     SM9_ENC_MASTER_KEY enc_mpk;
     if (!load_sm9_enc_master_pub_key(&enc_mpk)) return APP_ERR;
 

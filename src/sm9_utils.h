@@ -4,9 +4,16 @@
 #include "net.h"
 #include <gmssl/sm9.h>
 #include "common.h"
+#define SIGN_MSK_PATH     "sm9_sign_master_key.pem"
+#define SIGN_MPK_PATH     "sm9_sign_master_public.pem"
+#define OBU_SIGN_KEY_PATH "sm9_obu_sign_key.pem"
+
+// --- 新增：加密/交换密钥文件 ---
+#define ENC_MSK_PATH "sm9_enc_master_key.pem"
+#define ENC_MPK_PATH "sm9_enc_master_public.pem"
+#define OBU_ENC_KEY_PATH "sm9_obu_enc_key.pem"
+#define RSU_ENC_KEY_PATH "sm9_rsu_enc_key.pem"
 // src/sm9_utils.h (最终修正版)
-
-
 
 // --- 密钥生成与管理 ---
 int sm9_master_init(void);
@@ -18,9 +25,7 @@ int sm9_issue_enc_prv_for_id(const char *id, const char* filepath);
 int load_sm9_sign_key(SM9_SIGN_KEY *key);
 int load_sm9_master_pub_key(SM9_SIGN_MASTER_KEY *mpk);
 int load_sm9_enc_master_pub_key(SM9_ENC_MASTER_KEY *mpk);
-int load_sm9_enc_key_for_obu(SM9_ENC_KEY *key); // OBU专属加载
-int load_sm9_enc_key_for_rsu(SM9_ENC_KEY *key); // RSU专属加载
-
+int load_sm9_enc_key(SM9_ENC_KEY *key,char *filepath);
 // --- 签名与验证 ---
 int sign_message(uint8_t *msg, size_t msg_len, uint8_t *sig, size_t *sig_len, SM9_SIGN_KEY *user_key);
 int verify_signature(uint8_t *msg, size_t msg_len, uint8_t *signature, size_t sig_len, SM9_SIGN_MASTER_KEY *mpk, char *user_id);

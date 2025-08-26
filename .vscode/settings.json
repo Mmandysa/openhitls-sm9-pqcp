@@ -74,7 +74,10 @@
         "internet": "c",
         "sm2.h": "c",
         "asn1.h": "c",
-        "mem.h": "c"
+        "mem.h": "c",
+        "sm9_z256.h": "c",
+        "assert.h": "c",
+        "hex.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
