@@ -7,6 +7,7 @@ int main(void) {
     const char *obu_sign_id = "琼B12345";
     const char *obu_exch_id = "琼B12345"; 
     const char *rsu_exch_id = "RSU_001";
+    
     if (scloud_global_init("/usr/local/lib") != APP_OK) {
         fprintf(stderr, "PQCP provider init failed\n"); return -1;
     }
