@@ -16,6 +16,15 @@
 #include <gmssl/mem.h>
 #include <gmssl/sm9_z256.h>
 #define PASSWORD "obu_password"
+#define SIGN_MSK_PATH     "sm9_sign_master_key.pem"
+#define SIGN_MPK_PATH     "sm9_sign_master_public.pem"
+#define OBU_SIGN_KEY_PATH "sm9_obu_sign_key.pem"
+
+// --- 新增：加密/交换密钥文件 ---
+#define ENC_MSK_PATH "sm9_enc_master_key.pem"
+#define ENC_MPK_PATH "sm9_enc_master_public.pem"
+#define OBU_ENC_KEY_PATH "sm9_obu_enc_key.pem"
+#define RSU_ENC_KEY_PATH "sm9_rsu_enc_key.pem"
 
 
 int sm9_master_init(void) {
@@ -125,15 +134,6 @@ int verify_signature(uint8_t *msg, size_t msg_len, uint8_t *signature,
     return APP_OK;
 }
 
-/**
- * @brief 初始化SM9加密/交换主密钥对 (Master Key Pair)
- *
- * @功能       生成一套全新的SM9加密主密钥(MSK)和主公钥(MPK)。
- *             主密钥用口令加密后存入 ENC_MSK_PATH 文件。
- *             主公钥直接存入 ENC_MPK_PATH 文件。
- *             此函数只需在系统部署时运行一次。
- * @return     成功返回 APP_OK，失败返回 APP_ERR。
- */
 int sm9_enc_master_init(void) {
     SM9_ENC_MASTER_KEY master_key;
 
@@ -224,11 +224,15 @@ int sm9_issue_enc_prv_for_id(const char *id, const char* filepath) {
     return APP_OK;
 }
 
-// 加载自己的交换私钥
-int load_sm9_enc_key(SM9_ENC_KEY *key,char *filepath) {
-    FILE *fp = fopen(filepath, "r");
+// +++ 新增 +++ 为OBU和RSU创建两个独立的加载函数
+#define OBU_ENC_KEY_PATH "sm9_obu_enc_key.pem"
+#define RSU_ENC_KEY_PATH "sm9_rsu_enc_key.pem"
+
+// OBU 加载自己的交换私钥
+int load_sm9_enc_key_for_obu(SM9_ENC_KEY *key) {
+    FILE *fp = fopen(OBU_ENC_KEY_PATH, "r");
     if (!fp) {
-        perror("ERROR: Failed to open enc user key file");
+        perror("ERROR: Failed to open OBU's enc user key file");
         return 0;
     }
     if (sm9_enc_key_info_decrypt_from_pem(key, PASSWORD, fp) != 1) {
@@ -241,14 +245,23 @@ int load_sm9_enc_key(SM9_ENC_KEY *key,char *filepath) {
     return 1;
 }
 
-/**
- * @brief 加载SM9加密/交换主公钥
- *
- * @功能       在程序运行时，从 ENC_MPK_PATH 文件中读取主公钥。
- * @param mpk  [输出] 一个指向 SM9_ENC_MASTER_KEY 结构体的指针，用于存放加载的公钥。
- *             (注意：gmssl中，加密主公钥结构体也用于存储，但只填充Ppube部分)
- * @return     成功返回1，失败返回0。
- */
+// RSU 加载自己的交换私钥
+int load_sm9_enc_key_for_rsu(SM9_ENC_KEY *key) {
+    FILE *fp = fopen(RSU_ENC_KEY_PATH, "r");
+    if (!fp) {
+        perror("ERROR: Failed to open RSU's enc user key file");
+        return 0;
+    }
+    if (sm9_enc_key_info_decrypt_from_pem(key, PASSWORD, fp) != 1) {
+        fprintf(stderr, "ERROR: Failed to load RSU's enc user key!\n");
+        error_print();
+        fclose(fp);
+        return 0;
+    }
+    fclose(fp);
+    return 1;
+}
+
 int load_sm9_enc_master_pub_key(SM9_ENC_MASTER_KEY *mpk) {
     FILE *fp = fopen(ENC_MPK_PATH, "r");
     if (!fp) {
@@ -272,8 +285,7 @@ int load_sm9_enc_master_pub_key(SM9_ENC_MASTER_KEY *mpk) {
     return 1;
 }
 
-// 生成hello消息nonce||ID||signature
-// 尝试增加RA
+// 生成hello消息RA||nonce||ID||signature
 int generate_message_hello(uint8_t *msg, uint32_t *length, const char *sign_id,const char *exch_id,
                            SM9_SIGN_KEY *user_key, const SM9_Z256_POINT *RA) {
     uint8_t ra_buf[65]; // SM9点非压缩格式为65字节 (0x04 || x || y)
@@ -477,101 +489,6 @@ int sm9_kex_obu_finish(SessionKeys *ks, SM9_ENC_MASTER_KEY *mpk, SM9_ENC_KEY *ke
     return APP_OK;
 }
 
-// OBU端：根据【正确】的密钥协商协议计算共享密钥
-int correct_obu_compute_key(const SM9_ENC_MASTER_KEY *mpk, const SM9_ENC_KEY *key,
-                            const char *rsu_id, size_t rsu_idlen, const sm9_z256_t rA,
-                            const SM9_Z256_POINT *RB, uint8_t *sk, size_t klen,
-                            const SM9_Z256_POINT* RA, const char* obu_id, size_t obu_idlen)
-{
-    SM9_Z256_POINT QB; // RSU的完整公钥
-    sm9_z256_fp12_t term1, term2, shared_secret;
-    uint8_t secret_bytes[32 * 12];
-    uint8_t ra_bytes[65], rb_bytes[65];
-    SM3_KDF_CTX kdf_ctx;
-
-    // 1. 获取RSU的完整公钥 QB
-    if (get_full_public_key_point(&QB, mpk, rsu_id, rsu_idlen) != 1) return -1;
-
-    // 2. 计算共享秘密的第一部分: term1 = e(d_A, Q_B) ^ r_A
-    sm9_z256_pairing(term1, &key->de, &QB);
-    sm9_z256_fp12_pow(term1, term1, rA);
-
-    // 3. 计算共享秘密的第二部分: term2 = e(Ppub_e, RB) ^ r_A
-    sm9_z256_pairing(term2, sm9_z256_twist_generator(), &mpk->Ppube);
-    // 注意：e(Ppub,RB) = e(ks*P1, rB*P1) 这是错的，应该是 e(Ppub_e, P2)
-    // 正确公式是 e(deA, RB)
-    sm9_z256_pairing(term2, &key->de, RB);
-    sm9_z256_fp12_pow(term2, term2, rA);
-    
-    // 4. 最终共享秘密 = term1 * term2
-    // 这个协议比想象的复杂，我们简化为一个已知正确的协议
-    // Shared Secret = e(deA, RB) ^ rA
-    sm9_z256_pairing(shared_secret, &key->de, RB);
-    sm9_z256_fp12_pow(shared_secret, shared_secret, rA);
-
-    // 打印共享秘密
-    sm9_z256_fp12_to_bytes(shared_secret, secret_bytes);
-    printf("[DEBUG] OBU calculated Shared Secret (SK_A): ");
-    for (int i = 0; i < 32; i++) printf("%02x", secret_bytes[i]); // 只打印前32字节
-    printf("\n");
-
-    // 5. 使用 KDF 生成最终密钥
-    sm9_z256_point_to_uncompressed_octets(RA, ra_bytes);
-    sm9_z256_point_to_uncompressed_octets(RB, rb_bytes);
-
-    sm3_kdf_init(&kdf_ctx, klen);
-    sm3_kdf_update(&kdf_ctx, (uint8_t *)obu_id, obu_idlen);
-    sm3_kdf_update(&kdf_ctx, (uint8_t *)rsu_id, rsu_idlen);
-    sm3_kdf_update(&kdf_ctx, ra_bytes + 1, 64);
-    sm3_kdf_update(&kdf_ctx, rb_bytes + 1, 64);
-    sm3_kdf_update(&kdf_ctx, secret_bytes, sizeof(secret_bytes));
-    sm3_kdf_finish(&kdf_ctx, sk);
-
-    gmssl_secure_clear(&shared_secret, sizeof(shared_secret));
-    return 1;
-}
-
-// RSU端：根据【正确】的密钥协商协议计算共享密钥
-int correct_rsu_compute_key(const SM9_ENC_MASTER_KEY *mpk, const SM9_ENC_KEY *key,
-                            const char *obu_id, size_t obu_idlen, const sm9_z256_t rB,
-                            const SM9_Z256_POINT *RA, uint8_t *sk, size_t klen,
-                            const SM9_Z256_POINT* RB, const char* rsu_id, size_t rsu_idlen)
-{
-    SM9_Z256_POINT QA; // OBU的完整公钥
-    sm9_z256_fp12_t term1, term2, shared_secret;
-    uint8_t secret_bytes[32 * 12];
-    uint8_t ra_bytes[65], rb_bytes[65];
-    SM3_KDF_CTX kdf_ctx;
-
-    // 1. 获取OBU的完整公钥 QA
-    if (get_full_public_key_point(&QA, mpk, obu_id, obu_idlen) != 1) return -1;
-    
-    // 2. 计算共享秘密
-    // Shared Secret = e(deB, RA) ^ rB
-    sm9_z256_pairing(shared_secret, &key->de, RA);
-    sm9_z256_fp12_pow(shared_secret, shared_secret, rB);
-
-    // 打印共享秘密
-    sm9_z256_fp12_to_bytes(shared_secret, secret_bytes);
-    printf("[DEBUG] RSU calculated Shared Secret (SK_B): ");
-    for (int i = 0; i < 32; i++) printf("%02x", secret_bytes[i]); // 只打印前32字节
-    printf("\n");
-
-    // 3. 使用 KDF 生成最终密钥 (KDF输入必须和OBU端完全一样)
-    sm9_z256_point_to_uncompressed_octets(RA, ra_bytes);
-    sm9_z256_point_to_uncompressed_octets(RB, rb_bytes);
-
-    sm3_kdf_init(&kdf_ctx, klen);
-    sm3_kdf_update(&kdf_ctx, (uint8_t *)obu_id, obu_idlen);
-    sm3_kdf_update(&kdf_ctx, (uint8_t *)rsu_id, rsu_idlen);
-    sm3_kdf_update(&kdf_ctx, ra_bytes + 1, 64);
-    sm3_kdf_update(&kdf_ctx, rb_bytes + 1, 64);
-    sm3_kdf_update(&kdf_ctx, secret_bytes, sizeof(secret_bytes));
-    sm3_kdf_finish(&kdf_ctx, sk);
-
-    gmssl_secure_clear(&shared_secret, sizeof(shared_secret));
-    return 1;
-}
 // 随机数生成
 int gen_nonce(uint8_t *nonce, uint32_t len) {
     if (RAND_bytes(nonce, len) != 1) {
