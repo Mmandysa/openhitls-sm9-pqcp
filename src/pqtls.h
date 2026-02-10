@@ -13,7 +13,7 @@
  */
 
 typedef struct {
-    /* 角色：true=客户端(OBU)，false=服务端(RSU) */
+    /* 角色：true=客户端(Client)，false=服务端(Server) */
     bool is_client;
 
     /* 双方身份（UTF-8 字节串，不含 '\0'） */
@@ -47,13 +47,13 @@ typedef struct {
 } PQTLS_Session;
 
 /**
- * @brief 客户端（OBU）发起 PQTLS 握手，成功后 sess 中填充密钥与参数
+ * @brief 客户端（Client）发起 PQTLS 握手，成功后 sess 中填充密钥与参数
  */
 int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expected_server_id_utf8,
                            PQTLS_Session *sess);
 
 /**
- * @brief 服务端（RSU）执行 PQTLS 握手，成功后 sess 中填充密钥与参数
+ * @brief 服务端（Server）执行 PQTLS 握手，成功后 sess 中填充密钥与参数
  */
 int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const char *server_id_utf8,
                            PQTLS_Session *sess);
@@ -70,4 +70,3 @@ int pqtls_recv_appdata(int fd, PQTLS_Session *sess, uint16_t *app_type, uint8_t 
                        uint32_t *payload_len);
 
 #endif /* PQTLS_H */
-

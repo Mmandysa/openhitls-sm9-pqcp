@@ -17,8 +17,8 @@ make all
 生成的可执行文件在 `bin/`：
 
 - `bin/setup_keys`
-- `bin/rsu`
-- `bin/obu`
+- `bin/server`
+- `bin/client`
 
 ## 2) 生成密钥材料（首次运行需要）
 
@@ -30,21 +30,21 @@ make all
 
 - `keys/sm9_sign_master_key.pem`
 - `keys/sm9_sign_master_public.pem`
-- `keys/sm9_obu_sign_key.pem`
-- `keys/sm9_rsu_sign_key.pem`
+- `keys/sm9_client_sign_key.pem`
+- `keys/sm9_server_sign_key.pem`
 
 ## 3) 运行演示
 
 终端 A（先启动服务端）：
 
 ```bash
-./bin/rsu
+./bin/server
 ```
 
 终端 B（再启动客户端）：
 
 ```bash
-./bin/obu
+./bin/client
 ```
 
 预期现象：
@@ -77,7 +77,7 @@ sudo ldconfig
 
 演示默认使用：
 
-- OBU ID：`琼B12345`
-- RSU ID：`RSU_001`
+- Client ID：`琼B12345`
+- Server ID：`RSU_001`
 
-如果修改了 `src/obu.c` / `src/rsu.c` 中的 ID，需要同时重新生成对应的 SM9 签名私钥（可改 `src/setup_keys.c` 后重新执行 `./bin/setup_keys`）。
+如果修改了 `src/client.c` / `src/server.c` 中的 ID，需要同时重新生成对应的 SM9 签名私钥（可改 `src/setup_keys.c` 后重新执行 `./bin/setup_keys`）。

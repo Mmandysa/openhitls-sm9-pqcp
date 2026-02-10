@@ -13,12 +13,12 @@
 #include <stdio.h>
 
 /**
- * @brief 程序入口：生成 SM9 签名主密钥与 OBU/RSU 的签名私钥
+ * @brief 程序入口：生成 SM9 签名主密钥与 Client/Server 的签名私钥
  */
 int main(void)
 {
-    const char *obu_id = "琼B12345";
-    const char *rsu_id = "RSU_001";
+    const char *client_id = "琼B12345";
+    const char *server_id = "RSU_001";
 
     printf("===== Generating SM9 SIGNATURE Keys (keys/*.pem) =====\n");
 
@@ -28,15 +28,15 @@ int main(void)
         return -1;
     }
 
-    /* 2) 为 OBU 颁发签名私钥 */
-    if (sm9_issue_prv_for_id(obu_id, SM9_OBU_SIGN_KEY_PATH) != APP_OK) {
-        fprintf(stderr, "Failed to issue SM9 SIGN key for OBU.\n");
+    /* 2) 为 Client 颁发签名私钥 */
+    if (sm9_issue_prv_for_id(client_id, SM9_CLIENT_SIGN_KEY_PATH) != APP_OK) {
+        fprintf(stderr, "Failed to issue SM9 SIGN key for Client.\n");
         return -1;
     }
 
-    /* 3) 为 RSU 颁发签名私钥 */
-    if (sm9_issue_prv_for_id(rsu_id, SM9_RSU_SIGN_KEY_PATH) != APP_OK) {
-        fprintf(stderr, "Failed to issue SM9 SIGN key for RSU.\n");
+    /* 3) 为 Server 颁发签名私钥 */
+    if (sm9_issue_prv_for_id(server_id, SM9_SERVER_SIGN_KEY_PATH) != APP_OK) {
+        fprintf(stderr, "Failed to issue SM9 SIGN key for Server.\n");
         return -1;
     }
 

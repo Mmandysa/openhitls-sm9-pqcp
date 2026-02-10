@@ -18,13 +18,15 @@ PQTLS_COMMON_SRCS := \
 
 PQTLS_LDLIBS := -lgmssl -lhitls_crypto -lhitls_bsl -lpqcp_provider -ldl -lpthread
 
-.PHONY: all clean setup_keys obu rsu test run_test
+.PHONY: all clean setup_keys client server obu rsu test run_test
 
-all: setup_keys rsu obu test
+all: setup_keys server client test
 
 setup_keys: bin/setup_keys
-rsu: bin/rsu
-obu: bin/obu
+server: bin/server
+client: bin/client
+rsu: server
+obu: client
 test: bin/pqtls_test
 run_test: test
 	./bin/pqtls_test
@@ -35,10 +37,10 @@ bin:
 bin/setup_keys: src/setup_keys.c src/sm9_utils.c | bin
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@ $(LDFLAGS) -lgmssl
 
-bin/rsu: src/rsu.c $(PQTLS_COMMON_SRCS) | bin
+bin/server: src/server.c $(PQTLS_COMMON_SRCS) | bin
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@ $(LDFLAGS) $(PQTLS_LDLIBS)
 
-bin/obu: src/obu.c $(PQTLS_COMMON_SRCS) | bin
+bin/client: src/client.c $(PQTLS_COMMON_SRCS) | bin
 	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@ $(LDFLAGS) $(PQTLS_LDLIBS)
 
 bin/pqtls_test: src/pqtls_test.c $(PQTLS_COMMON_SRCS) | bin

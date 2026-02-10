@@ -528,7 +528,7 @@ int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expec
     if (load_sm9_master_pub_key(&mpk) != APP_OK) return APP_ERR;
 
     SM9_SIGN_KEY client_sign_key;
-    if (load_sm9_sign_key_from_file(&client_sign_key, SM9_OBU_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
+    if (load_sm9_sign_key_from_file(&client_sign_key, SM9_CLIENT_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
 
     /* 1) 发送 CLIENT_HELLO */
     if (rand_bytes(sess->client_random, PQTLS_RANDOM_LEN) != 0) return APP_ERR;
@@ -734,7 +734,7 @@ int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const ch
     if (load_sm9_master_pub_key(&mpk) != APP_OK) return APP_ERR;
 
     SM9_SIGN_KEY server_sign_key;
-    if (load_sm9_sign_key_from_file(&server_sign_key, SM9_RSU_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
+    if (load_sm9_sign_key_from_file(&server_sign_key, SM9_SERVER_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
 
     PQTLS_Transcript tr = {0};
 
@@ -936,4 +936,3 @@ int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const ch
     sess->recv_seq = 0;
     return APP_OK;
 }
-

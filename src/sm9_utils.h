@@ -17,11 +17,15 @@
 /* 密钥文件路径（相对项目根目录运行时的工作目录） */
 #define SM9_SIGN_MSK_PATH      "keys/sm9_sign_master_key.pem"
 #define SM9_SIGN_MPK_PATH      "keys/sm9_sign_master_public.pem"
-#define SM9_OBU_SIGN_KEY_PATH  "keys/sm9_obu_sign_key.pem"
-#define SM9_RSU_SIGN_KEY_PATH  "keys/sm9_rsu_sign_key.pem"
+#define SM9_CLIENT_SIGN_KEY_PATH  "keys/sm9_client_sign_key.pem"
+#define SM9_SERVER_SIGN_KEY_PATH  "keys/sm9_server_sign_key.pem"
+
+/* 兼容旧命名（OBU/RSU） */
+#define SM9_OBU_SIGN_KEY_PATH SM9_CLIENT_SIGN_KEY_PATH
+#define SM9_RSU_SIGN_KEY_PATH SM9_SERVER_SIGN_KEY_PATH
 
 /* PEM 加密口令（演示用，生产环境应替换成安全的密钥保护方案） */
-#define SM9_KEY_PASSWORD "obu_password"
+#define SM9_KEY_PASSWORD "pqtls_demo_password"
 
 /* =========================
  * 密钥生成/颁发（通常由 setup_keys 工具调用）

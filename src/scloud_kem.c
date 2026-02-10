@@ -179,7 +179,7 @@ void scloud_ctx_free(SCloudCtx *sc)
 }
 
 /**
- * @brief RSU 端生成一次性 SCloud+ KEM 密钥对（用于本次握手）
+ * @brief Server 端生成一次性 SCloud+ KEM 密钥对（用于本次握手）
  */
 int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pub_cap, uint8_t *prv, uint32_t prv_cap)
 {
@@ -266,7 +266,7 @@ static int32_t call_set_prv(void *ctx, const uint8_t *prv, uint32_t prv_len)
 }
 
 /**
- * @brief OBU 端：使用 RSU 公钥做 KEM 封装，得到密文与共享秘密
+ * @brief Client 端：使用 Server 公钥做 KEM 封装，得到密文与共享秘密
  */
 int scloud_obu_encaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_pub, uint32_t rsu_pub_len,
                       uint8_t *cipher, uint32_t *cipher_len,
@@ -299,7 +299,7 @@ int scloud_obu_encaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_pub, u
 }
 
 /**
- * @brief RSU 端：用私钥解封，得到共享秘密
+ * @brief Server 端：用私钥解封，得到共享秘密
  */
 int scloud_rsu_decaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_prv, uint32_t rsu_prv_len,
                       const uint8_t *cipher, uint32_t cipher_len,

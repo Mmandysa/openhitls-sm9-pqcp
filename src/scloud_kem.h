@@ -37,19 +37,19 @@ void scloud_global_cleanup(void);
 void scloud_ctx_free(SCloudCtx *sc);
 
 /**
- * @brief RSU 端：创建 SCloud+ 上下文、设置安全等级、生成公私钥对
+ * @brief Server 端：创建 SCloud+ 上下文、设置安全等级、生成公私钥对
  */
 int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pub_cap, uint8_t *prv, uint32_t prv_cap);
 
 /**
- * @brief OBU 端：使用 RSU 公钥做 KEM 封装，得到密文 C 与共享秘密 k_pqc
+ * @brief Client 端：使用 Server 公钥做 KEM 封装，得到密文 C 与共享秘密 k_pqc
  */
 int scloud_obu_encaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_pub, uint32_t rsu_pub_len,
                       uint8_t *cipher, uint32_t *cipher_len,
                       uint8_t *k_pqc, uint32_t *k_pqc_len);
 
 /**
- * @brief RSU 端：用私钥解封，得到共享秘密 k_pqc
+ * @brief Server 端：用私钥解封，得到共享秘密 k_pqc
  */
 int scloud_rsu_decaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_prv, uint32_t rsu_prv_len,
                       const uint8_t *cipher, uint32_t cipher_len,
