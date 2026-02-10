@@ -80,7 +80,6 @@ int load_sm9_master_pub_key(SM9_SIGN_MASTER_KEY *mpk) {
     return 1;
 }
 
-
 //签名
 int sign_message(uint8_t *msg, size_t msg_len, uint8_t *sig, 
                 size_t *sig_len, SM9_SIGN_KEY *user_key) {
@@ -579,4 +578,56 @@ int gen_nonce(uint8_t *nonce, uint32_t len) {
         return APP_ERR;
     }
     return APP_OK;
+}
+
+// 生成符合 TLS 标准的 Hello.random
+int gen_hello_random(uint8_t *random) {
+    if (random == NULL) {
+        fprintf(stderr, "ERROR: random buffer is NULL\n");
+        return APP_ERR;
+    }
+    
+    // 前 4 字节: GMT Unix 时间（大端序）
+    uint32_t gmt_unix_time = (uint32_t)time(NULL);
+    uint32_t gmt_be = htonl(gmt_unix_time);
+    memcpy(random, &gmt_be, 4);
+    
+    // 后 28 字节: 安全随机数
+    if (RAND_bytes(random + 4, 28) != 1) {
+        fprintf(stderr, "ERROR: RAND_bytes failed for secure random part\n");
+        return APP_ERR;
+    }
+    
+    return APP_OK;
+}
+
+// 单独生成随机数
+int gen_cryptographic_random(uint8_t *output, size_t len) {
+    if (output == NULL || len == 0) {
+        fprintf(stderr, "ERROR: invalid parameters for cryptographic random\n");
+        return APP_ERR;
+    }
+    if (RAND_bytes(output, len) != 1) {
+        fprintf(stderr, "ERROR: RAND_bytes failed for cryptographic random\n");
+        return APP_ERR;
+    }
+    return APP_OK;
+}
+
+// 工具函数：打印 random 内容
+void print_random_hex(const char *label, const uint8_t *random, size_t len) {
+    printf("%s: ", label);
+    for (size_t i = 0; i < len; i++) {
+        printf("%02x", random[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+        else if ((i + 1) % 4 == 0) printf(" ");
+    }
+    printf("\n");
+}
+
+// 工具函数：从 random 中提取 GMT 时间
+uint32_t extract_gmt_time(const uint8_t *random) {
+    uint32_t gmt_be;
+    memcpy(&gmt_be, random, 4);
+    return ntohl(gmt_be);
 }
