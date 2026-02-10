@@ -7,8 +7,13 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <errno.h>
 
-int net_listen(int port) {
+/**
+ * @brief 创建监听套接字并开始 listen
+ */
+int net_listen(int port)
+{
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return APP_ERR;
     int on = 1;
@@ -25,11 +30,19 @@ int net_listen(int port) {
     return fd;
 }
 
-int net_accept(int listen_fd) {
+/**
+ * @brief 接受一个新的 TCP 连接
+ */
+int net_accept(int listen_fd)
+{
     return accept(listen_fd, NULL, NULL);
 }
 
-int net_connect(const char *host, int port) {
+/**
+ * @brief 连接到指定服务端
+ */
+int net_connect(const char *host, int port)
+{
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return APP_ERR;
 
@@ -42,38 +55,65 @@ int net_connect(const char *host, int port) {
     return fd;
 }
 
-int net_send_all(int fd, const void *buf, int len) {
+/**
+ * @brief 发送 len 字节（内部循环直到发送完或失败）
+ */
+int net_send_all(int fd, const void *buf, int len)
+{
     const uint8_t *p = (const uint8_t*)buf;
     int sent = 0;
     while (sent < len) {
         int n = send(fd, p + sent, len - sent, 0);
-        if (n <= 0) return APP_ERR;
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            perror("send");
+            return APP_ERR;
+        }
+        if (n == 0) return APP_ERR;
         sent += n;
     }
     return sent;
 }
 
-int net_recv_all(int fd, void *buf, int len) {
+/**
+ * @brief 接收 len 字节（内部循环直到接收完或失败）
+ */
+int net_recv_all(int fd, void *buf, int len)
+{
     uint8_t *p = (uint8_t*)buf;
     int got = 0;
     while (got < len) {
         int n = recv(fd, p + got, len - got, 0);
-        if (n <= 0) return APP_ERR;
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            perror("recv");
+            return APP_ERR;
+        }
+        if (n == 0) return APP_ERR;
         got += n;
     }
     return got;
 }
 
-int net_send_packet(int fd, uint16_t type, const void *payload, uint32_t len) {
+/**
+ * @brief 发送一帧：PacketHeader(type,len) + payload
+ */
+int net_send_packet(int fd, uint16_t type, const void *payload, uint32_t len)
+{
     PacketHeader h = { .type = htons(type), .len = htonl(len) };
     if (net_send_all(fd, &h, sizeof(h)) != sizeof(h)) return APP_ERR;
-    if (len && payload) {
+    if (len != 0) {
+        if (!payload) return APP_ERR;
         if (net_send_all(fd, payload, (int)len) != (int)len) return APP_ERR;
     }
     return APP_OK;
 }
 
-int net_recv_packet(int fd, uint16_t *type, uint8_t *payload, uint32_t *len, uint32_t cap) {
+/**
+ * @brief 接收一帧：先读定长头，再按 len 读满 payload
+ */
+int net_recv_packet(int fd, uint16_t *type, uint8_t *payload, uint32_t *len, uint32_t cap)
+{
     printf("[net_recv_packet] waiting for packet...\n");
     PacketHeader h;
     if (net_recv_all(fd, &h, sizeof(h)) != sizeof(h)) return APP_ERR;
@@ -88,48 +128,32 @@ int net_recv_packet(int fd, uint16_t *type, uint8_t *payload, uint32_t *len, uin
     return APP_OK;
 }
 
-void net_close(int fd) {
+/**
+ * @brief 关闭套接字
+ */
+void net_close(int fd)
+{
     if (fd >= 0) close(fd);
 }
 
-void print_packet_info(const PacketHeader *header) {
+/**
+ * @brief 打印帧头信息（调试用）
+ */
+void print_packet_info(const PacketHeader *header)
+{
 
     if (!header) return;
     uint16_t type = ntohs(header->type);
-    switch (type)
-    {
-        case MSG_HELLO:
-            printf("HELLO\n");
-            break;
-        case MSG_KEM_PUBKEY:
-            printf("KEM_PUBKEY\n");
-            break;
-        case MSG_KEM_CIPHERTEXT:
-            printf("KEM_CIPHERTEXT\n");
-            break;
-        case MSG_AUTH_SIGNATURE:
-            printf("AUTH_SIGNATURE\n");
-            break;
-        case MSG_AUTH_VERIFY_OK:
-            printf("AUTH_VERIFY_OK\n");
-            break;
-        case MSG_DATA_SEC:
-            printf("DATA_SEC\n");
-            break;
-        case MSG_AUTH_REQUEST:
-            printf("AUTH_REQUEST\n");
-            break;
-        case MSG_AUTH_RESPONSE:
-            printf("AUTH_RESPONSE\n");
-            break;
-        default:
-            break;
-    }
+    printf("Record Type: 0x%04x\n", type);
     printf("Payload Length: %u\n", ntohl(header->len));
 }
 
 //根据当前时间获取ISO 8601格式的时间戳
-void get_iso8601_timestamp(char *buffer, size_t buffer_size) {
+/**
+ * @brief 根据当前时间获取 ISO 8601（UTC）格式时间戳
+ */
+void get_iso8601_timestamp(char *buffer, size_t buffer_size)
+{
     time_t now;
     struct tm *utc_time;
     time(&now);

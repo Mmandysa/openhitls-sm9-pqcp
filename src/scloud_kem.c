@@ -5,11 +5,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
 #include "crypto/crypt_eal_provider.h"
 #include "crypto/crypt_eal_implprovider.h"
 #include "crypto/crypt_eal_rand.h"
-#include "crypto/crypt_eal_pkey.h"
-#include "crypto/crypt_eal_md.h"
 #include "crypto/crypt_errno.h"
 #include "bsl/bsl_err.h"             
 #include "bsl/bsl_params.h" 
@@ -18,15 +17,18 @@
 #include "pqcp/pqcp_types.h" 
 #include "pqcp/pqcp_provider_impl.h"
 #include "scloudplus/scloudplus_local.h"
-#include <gmssl/sm3.h>
-#include <gmssl/sm4.h>
 
 // 全局 libCtx / provMgr
 static CRYPT_EAL_LibCtx *g_lib = NULL;
 static CRYPT_EAL_ProvMgrCtx *g_mgr = NULL;
 
-int scloud_global_init(const char *prov_path) {
+/**
+ * @brief 初始化 openHiTLS provider（PQCP）与随机数模块
+ */
+int scloud_global_init(const char *prov_path)
+{
     int32_t ret;
+    if (g_lib) return APP_OK;
     g_lib = CRYPT_EAL_LibCtxNew();
     if (!g_lib) return APP_ERR;
 
@@ -42,7 +44,25 @@ int scloud_global_init(const char *prov_path) {
     return APP_OK;
 }
 
-static void* find_and_call_newctx(void) {
+/**
+ * @brief 释放全局 provider 与随机数资源（可选）
+ */
+void scloud_global_cleanup(void)
+{
+    if (g_lib) {
+        (void)CRYPT_EAL_ProviderUnload(g_lib, BSL_SAL_LIB_FMT_LIBSO, "pqcp_provider");
+        CRYPT_EAL_LibCtxFree(g_lib);
+    }
+    g_lib = NULL;
+    g_mgr = NULL;
+    CRYPT_EAL_RandDeinit();
+}
+
+/**
+ * @brief 通过 provider 的实现函数表创建 SCloud+ pkey 上下文
+ */
+static void *find_and_call_newctx(void)
+{
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_NEWCTX) {
             printf("[SCloudPlus] new context created\n");
@@ -52,7 +72,11 @@ static void* find_and_call_newctx(void) {
     return NULL;
 }
 
-static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len) {
+/**
+ * @brief 调用 provider 的 ctrl 接口（设置安全等级/查询密文长度等）
+ */
+static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len)
+{
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_CTRL) {
             if(cmd==PQCP_SCLOUDPLUS_KEY_BITS){
@@ -76,7 +100,11 @@ static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len) {
     return CRYPT_NOT_SUPPORT;
 }
 
-static int32_t call_gen(void *ctx) {
+/**
+ * @brief 调用 provider 的 genkey 接口生成密钥对
+ */
+static int32_t call_gen(void *ctx)
+{
     for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
         if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GENKEY) {
             printf("[SCloudPlus] key pair generated\n");
@@ -86,7 +114,11 @@ static int32_t call_gen(void *ctx) {
     return CRYPT_NOT_SUPPORT;
 }
 
-static int32_t call_get_pub(void *ctx, uint8_t *out, uint32_t *outlen) {
+/**
+ * @brief 从 provider 上下文导出公钥字节串
+ */
+static int32_t call_get_pub(void *ctx, uint8_t *out, uint32_t *outlen)
+{
     BSL_Param p = {0};
     p.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY;
     p.value = out;
@@ -101,7 +133,11 @@ static int32_t call_get_pub(void *ctx, uint8_t *out, uint32_t *outlen) {
     return CRYPT_NOT_SUPPORT;
 }
 
-static int32_t call_get_prv(void *ctx, uint8_t *out, uint32_t *outlen) {
+/**
+ * @brief 从 provider 上下文导出私钥字节串
+ */
+static int32_t call_get_prv(void *ctx, uint8_t *out, uint32_t *outlen)
+{
     BSL_Param p = {0};
     p.key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY;
     p.value = out;
@@ -116,14 +152,46 @@ static int32_t call_get_prv(void *ctx, uint8_t *out, uint32_t *outlen) {
     return CRYPT_NOT_SUPPORT;
 }
 
-int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pub_cap, uint8_t *prv, uint32_t prv_cap) {
-    if (!sc || !pub || !prv) return APP_ERR;
+/**
+ * @brief 释放 provider 创建的 pkey_ctx
+ */
+static void call_free_ctx(void *ctx)
+{
+    if (!ctx) return;
+    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
+        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_FREECTX) {
+            ((void (*)(void *))g_pqcpKeyMgmtScloudPlus[i].func)(ctx);
+            return;
+        }
+    }
+}
 
-    //创建上下文
+/**
+ * @brief 释放 SCloudCtx 内部资源
+ */
+void scloud_ctx_free(SCloudCtx *sc)
+{
+    if (!sc) return;
+    if (sc->pkey_ctx) call_free_ctx(sc->pkey_ctx);
+    sc->pkey_ctx = NULL;
+    sc->pk_len = 0;
+    sc->sk_len = 0;
+}
+
+/**
+ * @brief RSU 端生成一次性 SCloud+ KEM 密钥对（用于本次握手）
+ */
+int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pub_cap, uint8_t *prv, uint32_t prv_cap)
+{
+    if (!sc || !pub || !prv) return APP_ERR;
+    if (pub_cap == 0 || prv_cap == 0) return APP_ERR;
+
+    /* 避免复用旧上下文：每次握手建议生成新的 keypair */
+    scloud_ctx_free(sc);
+
     sc->pkey_ctx = find_and_call_newctx();
     if (!sc->pkey_ctx) return APP_ERR;
 
-    //设置安全等级
     int32_t ret = call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits));
     if (ret != 0) return APP_ERR;
 
@@ -137,27 +205,15 @@ int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pu
     if (call_get_prv(sc->pkey_ctx, prv, &l2) != 0) return APP_ERR;
     sc->sk_len = l2;
 
-    printf("[SCloudPlus] Key generation complete. Public key length: %u, Private key length: %u\n", sc->pk_len, sc->sk_len);
-    //打印公钥（十六进制）
-    // printf("Generated Public Key: \n");
-    // for (uint32_t i = 0; i < sc->pk_len; i++) {
-    //     printf("%02x", pub[i]);
-    // }
-    // printf("\n");
-
-    // 打印私钥（十六进制）
-    // printf("Generated Private Key: \n");
-    // for (uint32_t i = 0; i < sc->sk_len; i++) {
-    //     printf("%02X ", prv[i]);
-    // }
-    // printf("\n");
-
-
+    printf("[SCloudPlus] Key generation complete. pk_len=%u sk_len=%u\n", sc->pk_len, sc->sk_len);
     return APP_OK;
 }
 
-// 封装：用 KEM 表
-static int32_t call_encaps(void *ctx, uint8_t *ct, uint32_t *ctLen, uint8_t *ss, uint32_t *ssLen) {
+/**
+ * @brief 通过 provider 的 KEM 实现进行封装：输出 (ciphertext, shared_secret)
+ */
+static int32_t call_encaps(void *ctx, uint8_t *ct, uint32_t *ctLen, uint8_t *ss, uint32_t *ssLen)
+{
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
         if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_ENCAPSULATE) {
             return ((int32_t(*)(void*, uint8_t*, uint32_t*, uint8_t*, uint32_t*))g_pqcpKemScloudPlus[i].func)
@@ -167,8 +223,11 @@ static int32_t call_encaps(void *ctx, uint8_t *ct, uint32_t *ctLen, uint8_t *ss,
     return CRYPT_NOT_SUPPORT;
 }
 
-// 解封
-static int32_t call_decaps(void *ctx, const uint8_t *ct, uint32_t ctLen, uint8_t *ss, uint32_t *ssLen) {
+/**
+ * @brief 通过 provider 的 KEM 实现进行解封：输入 ciphertext，输出 shared_secret
+ */
+static int32_t call_decaps(void *ctx, const uint8_t *ct, uint32_t ctLen, uint8_t *ss, uint32_t *ssLen)
+{
     for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
         if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_DECAPSULATE) {
             return ((int32_t(*)(void*, const uint8_t*, uint32_t, uint8_t*, uint32_t*))g_pqcpKemScloudPlus[i].func)
@@ -178,128 +237,84 @@ static int32_t call_decaps(void *ctx, const uint8_t *ct, uint32_t ctLen, uint8_t
     return CRYPT_NOT_SUPPORT;
 }
 
-// OBU 设置 RSU 公钥然后封装
-int scloud_obu_encaps(SCloudCtx *sc, const uint8_t *rsu_pub, uint32_t rsu_pub_len,
+/**
+ * @brief 将对端公钥写入 provider 上下文（用于封装）
+ */
+static int32_t call_set_pub(void *ctx, const uint8_t *pub, uint32_t pub_len)
+{
+    BSL_Param p = {.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = (void *)pub, .valueLen = pub_len};
+    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
+        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
+            return ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
+        }
+    }
+    return CRYPT_NOT_SUPPORT;
+}
+
+/**
+ * @brief 将本端私钥写入 provider 上下文（用于解封）
+ */
+static int32_t call_set_prv(void *ctx, const uint8_t *prv, uint32_t prv_len)
+{
+    BSL_Param p = {.key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = (void *)prv, .valueLen = prv_len};
+    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
+        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPRV) {
+            return ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
+        }
+    }
+    return CRYPT_NOT_SUPPORT;
+}
+
+/**
+ * @brief OBU 端：使用 RSU 公钥做 KEM 封装，得到密文与共享秘密
+ */
+int scloud_obu_encaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_pub, uint32_t rsu_pub_len,
                       uint8_t *cipher, uint32_t *cipher_len,
                       uint8_t *k_pqc, uint32_t *k_pqc_len)
 {
-    printf("rsu_pub_len: %u\n", rsu_pub_len);
-    if (!sc || !cipher || !cipher_len || !k_pqc || !k_pqc_len || !rsu_pub) {
-        printf("[SCloudPlus] Invalid parameters\n");
-        return APP_ERR;
-    }
+    if (!sc || !rsu_pub || rsu_pub_len == 0 || !cipher || !cipher_len || !k_pqc || !k_pqc_len) return APP_ERR;
+
     if (!sc->pkey_ctx) {
         sc->pkey_ctx = find_and_call_newctx();
         if (!sc->pkey_ctx) return APP_ERR;
     }
-    // 设置加密等级
-    uint32_t secBits = SCLOUDPLUS_SECBITS1;
-    int32_t ret = call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secBits, sizeof(secBits));
-    if (ret != 0) {
-        printf("[SCloudPlus] Set security level failed\n");
+
+    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits)) != 0) return APP_ERR;
+    if (call_set_pub(sc->pkey_ctx, rsu_pub, rsu_pub_len) != 0) return APP_ERR;
+
+    /* 查询本算法密文长度，并检查调用者缓冲区容量 */
+    uint32_t ct_need = 0;
+    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_GET_CIPHERLEN, &ct_need, sizeof(ct_need)) != 0) return APP_ERR;
+    if (ct_need > *cipher_len) return APP_ERR;
+
+    uint32_t ct_cap = *cipher_len;
+    *cipher_len = ct_cap;
+
+    if (call_encaps(sc->pkey_ctx, cipher, cipher_len, k_pqc, k_pqc_len) != 0) return APP_ERR;
+    if (*cipher_len != ct_need) {
+        /* 保守处理：长度不一致视为失败，避免编码/解码分歧 */
         return APP_ERR;
     }
-    // set pub
-    BSL_Param setPub = {.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = rsu_pub, .valueLen = rsu_pub_len};
-
-    for (int i=0; g_pqcpKeyMgmtScloudPlus[i].id!=0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
-            if (((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(sc->pkey_ctx, &setPub) != 0)     
-            {printf("[SCloudPlus] Set public key failed\n");return APP_ERR;}
-            break;
-        }
-    }
-
-    // 获取密文长度（ctrl）
-    uint32_t ct_len_tmp = 0;
-    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_GET_CIPHERLEN, &ct_len_tmp, sizeof(ct_len_tmp)) != 0) return APP_ERR;
-    *cipher_len = ct_len_tmp;
-
-    // 封装
-    if (call_encaps(sc->pkey_ctx, cipher, cipher_len, k_pqc, k_pqc_len) != 0) return APP_ERR;
-    printf("[SCloudPlus] Encapsulation complete. Cipher length: %u, Shared secret length: %u\n", *cipher_len, *k_pqc_len);
     return APP_OK;
 }
 
-int scloud_rsu_decaps(SCloudCtx *sc, const uint8_t *rsu_prv, uint32_t rsu_prv_len,
+/**
+ * @brief RSU 端：用私钥解封，得到共享秘密
+ */
+int scloud_rsu_decaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_prv, uint32_t rsu_prv_len,
                       const uint8_t *cipher, uint32_t cipher_len,
                       uint8_t *k_pqc, uint32_t *k_pqc_len)
 {
-    if (!sc || !rsu_prv || !cipher || !k_pqc || !k_pqc_len) return APP_ERR;
+    if (!sc || !rsu_prv || rsu_prv_len == 0 || !cipher || cipher_len == 0 || !k_pqc || !k_pqc_len) return APP_ERR;
+
     if (!sc->pkey_ctx) {
         sc->pkey_ctx = find_and_call_newctx();
         if (!sc->pkey_ctx) return APP_ERR;
     }
-    // set prv
-    BSL_Param setPrv = {0};
-    setPrv.key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY;
-    setPrv.value = (void*)rsu_prv;
-    setPrv.valueLen = rsu_prv_len;
 
-    for (int i=0; g_pqcpKeyMgmtScloudPlus[i].id!=0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPRV) {
-            if (((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(sc->pkey_ctx, &setPrv) != 0)
-                return APP_ERR;
-            break;
-        }
-    }
+    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits)) != 0) return APP_ERR;
+    if (call_set_prv(sc->pkey_ctx, rsu_prv, rsu_prv_len) != 0) return APP_ERR;
 
     if (call_decaps(sc->pkey_ctx, cipher, cipher_len, k_pqc, k_pqc_len) != 0) return APP_ERR;
     return APP_OK;
-}
-
-#include <gmssl/sm3.h> // 确保包含了sm3头文件
-
-// *** 修改后的 scloud_mix_keys_sm3 函数 ***
-int scloud_mix_keys_sm3(SessionKeys *ks)
-{
-    // +++ 新增开始 +++
-    // 安全检查：确保两个密钥都已生成，否则这是一个严重的安全问题
-    if (ks->k_sm9_len == 0 || ks->k_pqc_len == 0) {
-        fprintf(stderr, "SECURITY ERROR: One of the shared keys (k_sm9 or k_pqc) has not been generated!\n");
-        fprintf(stderr, "k_sm9_len = %u, k_pqc_len = %u\n", ks->k_sm9_len, ks->k_pqc_len);
-        // 为安全起见，将最终密钥清零并返回错误
-        memset(ks->k_final, 0, sizeof(ks->k_final));
-        ks->k_final_len = 0;
-        return -1; // 返回错误码
-    }
-    printf("Mixing k_sm9 (len=%u) and k_pqc (len=%u)\n", ks->k_sm9_len, ks->k_pqc_len);
-    // +++ 新增结束 +++
-
-    // *** 修改 ***
-    // 缓冲区大小需要同时容纳 k_sm9, k_pqc 和 transcript
-    size_t kdf_in_len = ks->k_sm9_len + ks->k_pqc_len + ks->transcript_len;
-    unsigned char *kdf_in = malloc(kdf_in_len);
-    if (!kdf_in) { 
-        fprintf(stderr, "malloc fail\n"); 
-        return -1; 
-    }
-
-    size_t off = 0;
-    // --- 保持原有逻辑，但增加了 k_sm9 ---
-    // 推荐的拼接顺序是 k_sm9 || k_pqc || transcript
-    memcpy(kdf_in + off, ks->k_sm9, ks->k_sm9_len);       off += ks->k_sm9_len; // +++ 新增 +++
-    memcpy(kdf_in + off, ks->k_pqc, ks->k_pqc_len);       off += ks->k_pqc_len;
-    memcpy(kdf_in + off, ks->transcript, ks->transcript_len); off += ks->transcript_len;
-
-    // --- 哈希计算逻辑保持不变 ---
-    unsigned char dgst[SM3_DIGEST_SIZE];
-    SM3_CTX sm3ctx;
-    sm3_init(&sm3ctx);
-    sm3_update(&sm3ctx, kdf_in, off); // off 现在是所有材料的总长度
-    sm3_finish(&sm3ctx, dgst);
-
-    free(kdf_in);
-
-    // --- 结果拷贝和打印逻辑保持不变 ---
-    memcpy(ks->k_final, dgst, SM3_DIGEST_SIZE);
-    ks->k_final_len = SM3_DIGEST_SIZE;
-
-    printf("[SUCCESS] Mixed k_final: ");
-    for (int i = 0; i < ks->k_final_len; i++) {
-        printf("%02x", ks->k_final[i]);
-    }
-    printf("\n");
-
-    return 0; // 返回成功码
 }

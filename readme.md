@@ -6,15 +6,24 @@ SM9_PQC_KeyManagement/
 ├── src/                    		# 核心源代码
 │   ├── obu.c
 │   ├── rsu.c
-│   ├── scloud_kem.h             #pqcp的scloud_kem密钥协商实现
+│   ├── scloud_kem.h             # SCloud+（PQCP KEM）封装：keygen/encaps/decaps
 │   ├── scloud_kem.c
-│   ├── sm9_utils.h              #sm9部分封装
+│   ├── sm9_utils.h              # SM9（签名）密钥/签名/验签封装
 │   ├── sm9_utils.c
 │   ├── net.h                    #网络通信模块
 │   |── net.c
-│   ├── protocol.h               #握手协议
-│   ├── protocol.c
+│   ├── pqtls.h                  # PQTLS 会话结构与对外 API
+│   ├── pqtls.c                  # PQTLS send/recv 包装
+│   ├── pqtls_defs.h             # 协议常量/枚举
+│   ├── pqtls_codec.{c,h}        # TLV/Handshake 编解码
+│   ├── pqtls_crypto.{c,h}       # SM3/HMAC/HKDF（openHiTLS）
+│   ├── pqtls_keyschedule.{c,h}  # Key schedule（HKDF-SM3）
+│   ├── pqtls_sm9_auth.{c,h}     # SM9_CERT_VERIFY 域分离签名/验签
+│   ├── pqtls_handshake.{c,h}    # 自定义 TLS-like 握手状态机
+│   ├── pqtls_record.{c,h}       # SM4-GCM Record Layer
 │   └── common.h                 #结构类型定义
+├── keys/                        # 运行时密钥材料（由 setup_keys 生成）
+├── Makefile                      # 一键编译（bin/obu, bin/rsu, bin/setup_keys）
 ├── study/                       #一些开发过程中的demo
 
 
@@ -28,24 +37,23 @@ SM9_PQC_KeyManagement/
    * `src/sm9_utils.c` + `src/sm9_utils.h`
    * 功能：
      * 生成 SM9 主密钥、派生用户私钥
-     * 挑战-响应签名认证逻辑
      * 调用 **GmSSL** 完成签名与验签
 2. **TCP 通信模块**
    * `src/net.c` + `src/net.h`
    * 功能：
      * 封装 **TCP** 接口
      * 发送/接收加密数据包
-3. **PQCP密钥模块**
+3. **PQCP（SCloud+ KEM）模块**
    * `src/scloud_kem.c` + `src/scloud_kem.h`
    * 功能：
      * 使用scloud_kem协商秘钥
-4. **协议模块**
-   * `src/protocol.c` 与 `src/protocol.c`
+4. **PQTLS（自定义 TLS-like 协议）模块**
+   * `src/pqtls_handshake.c` / `src/pqtls_record.c` 等
    * 功能：
-     * 建立 TCP 连接
-     * 执行 SM9 认证流程
-     * 协商 PQC 秘钥
-     * 得到混合秘钥
+     * 握手：CLIENT_HELLO / SERVER_HELLO / SM9_CERT_VERIFY / CLIENT_KEM / FINISHED
+     * 认证：SM9（经典，不抗量子）
+     * 密钥交换/会话保密性：SCloud+ KEM（抗量子）
+     * 记录层：SM4-GCM（AEAD）+ seq 重放保护
 5. **~~测试与演示~~**
    * ~~`tests/`~~
    * ~~测试 SM9 和 PQC 独立功能~~
@@ -78,33 +86,38 @@ SM9_PQC_KeyManagement/
 2. **生成密钥（目前我已经生成好了，此步略去）**
 
    ```bash
-   ./study/demo0
-   ./study/demo1
-   # 将生成的密钥文件移动到obu和rsu
+   make setup_keys
+   ./bin/setup_keys
    ```
 3. **启动服务端**
 
    * 项目根目录下编译，运行
    ```bash
-   /usr/bin/gcc -fdiagnostics-color=always -g src/rsu.c src/net.c src/protocol.c src/scloud_kem.c src/sm9_utils.c -o /home/tys/openhitls-sm9-pqcp/src/rsu -I/usr/local/include -I/usr/local/include/gmssl -I/usr/local/include/hitls -I/usr/local/include/hitls/auth -I/usr/local/include/hitls/bsl -I/usr/local/include/hitls/crypto -I/usr/local/include/hitls/pki -I/usr/local/include/pqcp -L/usr/local/lib -lgmssl -lcjson -lcrypto -lssl -lhitls_auth -lhitls_bsl -lhitls_crypto -lhitls_pki -lpqcp_provider -lpthread
-
-   ./src/rsu
+   make rsu
+   ./bin/rsu
    ```
 
 3. **启动客户端**
 
    * 项目根目录下编译，运行
    ```bash
-   /usr/bin/gcc -fdiagnostics-color=always -g src/obu.c src/net.c src/protocol.c src/scloud_kem.c src/sm9_utils.c -o /home/tys/openhitls-sm9-pqcp/src/obu -I/usr/local/include -I/usr/local/include/gmssl -I/usr/local/include/hitls -I/usr/local/include/hitls/auth -I/usr/local/include/hitls/bsl -I/usr/local/include/hitls/crypto -I/usr/local/include/hitls/pki -I/usr/local/include/pqcp -L/usr/local/lib -lgmssl -lcjson -lcrypto -lssl -lhitls_auth -lhitls_bsl -lhitls_crypto -lhitls_pki -lpqcp_provider -lpthread
-
-   ./src/obu
+   make obu
+   ./bin/obu
    ```
 
 4. **观察输出**
 
    * 身份认证成功日志
-   * TLS 会话建立成功
+   * PQTLS 会话建立成功
    * 加密消息传输成功
+
+5. **一键自测（打印密钥用于比对）**
+
+```bash
+make run_test
+```
+
+该测试会打印双方 `k_pqc` 与派生出的 `app_key/app_iv`，用于确认认证与密钥协商结果一致。
 
 ---
 

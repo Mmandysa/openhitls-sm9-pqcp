@@ -1,53 +1,45 @@
-// setup_keys.c (最终黄金标准版)
+/**
+ * @file setup_keys.c
+ * @brief 生成本项目演示所需的 SM9（签名）长期密钥材料。
+ *
+ * 说明：
+ * - 本项目的认证使用 SM9 签名，因此仅需要签名主密钥对（MSK/MPK）与双方的签名私钥。
+ * - 生成后的 pem 文件默认放在 `keys/` 目录下（见 src/sm9_utils.h 的路径宏）。
+ */
 
 #include "common.h"
 #include "sm9_utils.h"
+
 #include <stdio.h>
 
-int main() {
-    
-    // ===== 阶段一：生成签名 (SIGNATURE) 相关的密钥 =====
-    printf("===== Generating SM9 SIGNATURE Keys =====\n");
+/**
+ * @brief 程序入口：生成 SM9 签名主密钥与 OBU/RSU 的签名私钥
+ */
+int main(void)
+{
+    const char *obu_id = "琼B12345";
+    const char *rsu_id = "RSU_001";
 
-    // 1. 生成签名主密钥对
+    printf("===== Generating SM9 SIGNATURE Keys (keys/*.pem) =====\n");
+
+    /* 1) 生成签名主密钥对（MSK/MPK） */
     if (sm9_master_init() != APP_OK) {
-        fprintf(stderr, "Failed to init SIGN master key.\n");
+        fprintf(stderr, "Failed to init SM9 SIGN master key.\n");
         return -1;
     }
 
-    // 2. 为 OBU 颁发签名私钥
-    //    ID: "琼B12345"
-    //    File: "sm9_obu_sign_key.pem"
-    if (sm9_issue_prv_for_id("琼B12345", "sm9_obu_sign_key.pem") != APP_OK) {
-        fprintf(stderr, "Failed to issue SIGN key for OBU.\n");
+    /* 2) 为 OBU 颁发签名私钥 */
+    if (sm9_issue_prv_for_id(obu_id, SM9_OBU_SIGN_KEY_PATH) != APP_OK) {
+        fprintf(stderr, "Failed to issue SM9 SIGN key for OBU.\n");
         return -1;
     }
 
-    // ===== 阶段二：生成加密/交换 (ENCRYPTION/EXCHANGE) 相关的密钥 =====
-    printf("\n===== Generating SM9 ENCRYPTION/EXCHANGE Keys =====\n");
-
-    // 3. 生成加密/交换主密钥对
-    if (sm9_enc_master_init() != APP_OK) {
-        fprintf(stderr, "Failed to init ENC master key.\n");
+    /* 3) 为 RSU 颁发签名私钥 */
+    if (sm9_issue_prv_for_id(rsu_id, SM9_RSU_SIGN_KEY_PATH) != APP_OK) {
+        fprintf(stderr, "Failed to issue SM9 SIGN key for RSU.\n");
         return -1;
     }
 
-    // 4. 为 OBU 颁发交换私钥
-    //    ID: "琼B12345"
-    //    File: "sm9_obu_enc_key.pem"
-    if (sm9_issue_enc_prv_for_id("琼B12345", "sm9_obu_enc_key.pem") != APP_OK) {
-        fprintf(stderr, "Failed to issue ENC key for OBU.\n");
-        return -1;
-    }
-
-    // 5. 为 RSU 颁发交换私钥
-    //    ID: "RSU_001"
-    //    File: "sm9_rsu_enc_key.pem"
-    if (sm9_issue_enc_prv_for_id("RSU_001", "sm9_rsu_enc_key.pem") != APP_OK) {
-        fprintf(stderr, "Failed to issue ENC key for RSU.\n");
-        return -1;
-    }
-    
-    printf("\nAll keys have been generated successfully.\n");
+    printf("All SM9 SIGN keys generated successfully.\n");
     return 0;
 }
