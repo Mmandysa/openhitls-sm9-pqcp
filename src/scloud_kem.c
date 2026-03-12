@@ -8,6 +8,7 @@
 
 #include "crypto/crypt_eal_provider.h"
 #include "crypto/crypt_eal_implprovider.h"
+#include "crypto/crypt_eal_pkey.h"
 #include "crypto/crypt_eal_rand.h"
 #include "crypto/crypt_errno.h"
 #include "bsl/bsl_err.h"             
@@ -15,12 +16,24 @@
 #include "pqcp/pqcp_err.h" 
 #include "pqcp/pqcp_provider.h"
 #include "pqcp/pqcp_types.h" 
-#include "pqcp/pqcp_provider_impl.h"
-#include "scloudplus/scloudplus_local.h"
 
 // 全局 libCtx / provMgr
 static CRYPT_EAL_LibCtx *g_lib = NULL;
 static CRYPT_EAL_ProvMgrCtx *g_mgr = NULL;
+
+static int32_t secbits_to_alg_id(uint32_t secbits)
+{
+    switch (secbits) {
+        case SCLOUDPLUS_SECBITS1:
+            return PQCP_SCLOUDPLUS_128;
+        case SCLOUDPLUS_SECBITS2:
+            return PQCP_SCLOUDPLUS_192;
+        case SCLOUDPLUS_SECBITS3:
+            return PQCP_SCLOUDPLUS_256;
+        default:
+            return -1;
+    }
+}
 
 /**
  * @brief 初始化 openHiTLS provider（PQCP）与随机数模块
@@ -59,110 +72,82 @@ void scloud_global_cleanup(void)
 }
 
 /**
- * @brief 通过 provider 的实现函数表创建 SCloud+ pkey 上下文
+ * @brief 创建 SCloud+ pkey 上下文
  */
-static void *find_and_call_newctx(void)
+static CRYPT_EAL_PkeyCtx *new_pkey_ctx(void)
 {
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_NEWCTX) {
-            printf("[SCloudPlus] new context created\n");
-            return ((void*(*)(void*, int32_t))g_pqcpKeyMgmtScloudPlus[i].func)(NULL, CRYPT_PKEY_SCLOUDPLUS);
-        }
+    CRYPT_EAL_PkeyCtx *ctx = CRYPT_EAL_ProviderPkeyNewCtx(g_lib, PQCP_PKEY_SCLOUDPLUS,
+        CRYPT_EAL_PKEY_KEM_OPERATE, "provider=pqcp");
+    if (ctx != NULL) {
+        printf("[SCloudPlus] new context created\n");
     }
-    return NULL;
+    return ctx;
 }
 
 /**
- * @brief 调用 provider 的 ctrl 接口（设置安全等级/查询密文长度等）
+ * @brief 设置 SCloud+ 参数集
  */
-static int32_t call_ctrl(void *ctx, int32_t cmd, void *val, uint32_t len)
+static int32_t set_para_by_secbits(CRYPT_EAL_PkeyCtx *ctx, uint32_t secbits)
 {
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_CTRL) {
-            if(cmd==PQCP_SCLOUDPLUS_KEY_BITS){
-                printf("[SCloudPlus] PQCP_SCLOUDPLUS_KEY_BITS execute\n");
-            }
-            if(cmd==PQCP_SCLOUDPLUS_GET_PARA)
-            {
-                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_PARA execute\n");
-            }
-            if(cmd==PQCP_SCLOUDPLUS_GET_CIPHERLEN)
-            {
-                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_CIPHERLEN execute\n");
-            }
-            if(cmd==PQCP_SCLOUDPLUS_GET_SECBITS)
-            {
-                printf("[SCloudPlus] PQCP_SCLOUDPLUS_GET_SECBITS execute\n");
-            }
-            return ((int32_t(*)(void*, int32_t, void*, uint32_t))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, cmd, val, len);
-        }
+    int32_t alg_id = secbits_to_alg_id(secbits);
+    if (alg_id < 0) {
+        return CRYPT_INVALID_ARG;
     }
-    return CRYPT_NOT_SUPPORT;
+
+    printf("[SCloudPlus] set parameter set for %u-bit security\n", secbits);
+    return CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &alg_id, sizeof(alg_id));
 }
 
 /**
- * @brief 调用 provider 的 genkey 接口生成密钥对
+ * @brief 查询长度类参数
  */
-static int32_t call_gen(void *ctx)
+static int32_t get_pkey_u32(CRYPT_EAL_PkeyCtx *ctx, int32_t cmd, uint32_t *val)
 {
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GENKEY) {
-            printf("[SCloudPlus] key pair generated\n");
-            return ((int32_t(*)(void *))g_pqcpKeyMgmtScloudPlus[i].func)(ctx);
-        }
+    if (val == NULL) {
+        return CRYPT_INVALID_ARG;
     }
-    return CRYPT_NOT_SUPPORT;
+    return CRYPT_EAL_PkeyCtrl(ctx, cmd, val, sizeof(*val));
 }
 
 /**
  * @brief 从 provider 上下文导出公钥字节串
  */
-static int32_t call_get_pub(void *ctx, uint8_t *out, uint32_t *outlen)
+static int32_t call_get_pub(CRYPT_EAL_PkeyCtx *ctx, uint8_t *out, uint32_t *outlen)
 {
-    BSL_Param p = {0};
-    p.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY;
-    p.value = out;
-    p.valueLen = *outlen;
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GETPUB) {
-            int32_t r = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
-            if (r == 0) *outlen = p.useLen;
-            return r;
-        }
+    BSL_Param p[] = {
+        {PQCP_PARAM_SCLOUDPLUS_PUBKEY, BSL_PARAM_TYPE_OCTETS, out, *outlen, 0},
+        BSL_PARAM_END
+    };
+    int32_t ret = CRYPT_EAL_PkeyGetPubEx(ctx, p);
+    if (ret == CRYPT_SUCCESS || ret == PQCP_SUCCESS) {
+        *outlen = p[0].useLen;
     }
-    return CRYPT_NOT_SUPPORT;
+    return ret;
 }
 
 /**
  * @brief 从 provider 上下文导出私钥字节串
  */
-static int32_t call_get_prv(void *ctx, uint8_t *out, uint32_t *outlen)
+static int32_t call_get_prv(CRYPT_EAL_PkeyCtx *ctx, uint8_t *out, uint32_t *outlen)
 {
-    BSL_Param p = {0};
-    p.key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY;
-    p.value = out;
-    p.valueLen = *outlen;
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_GETPRV) {
-            int32_t r = ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
-            if (r == 0) *outlen = p.useLen;
-            return r;
-        }
+    BSL_Param p[] = {
+        {PQCP_PARAM_SCLOUDPLUS_PRVKEY, BSL_PARAM_TYPE_OCTETS, out, *outlen, 0},
+        BSL_PARAM_END
+    };
+    int32_t ret = CRYPT_EAL_PkeyGetPrvEx(ctx, p);
+    if (ret == CRYPT_SUCCESS || ret == PQCP_SUCCESS) {
+        *outlen = p[0].useLen;
     }
-    return CRYPT_NOT_SUPPORT;
+    return ret;
 }
 
 /**
  * @brief 释放 provider 创建的 pkey_ctx
  */
-static void call_free_ctx(void *ctx)
+static void call_free_ctx(CRYPT_EAL_PkeyCtx *ctx)
 {
-    if (!ctx) return;
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_FREECTX) {
-            ((void (*)(void *))g_pqcpKeyMgmtScloudPlus[i].func)(ctx);
-            return;
-        }
+    if (ctx != NULL) {
+        CRYPT_EAL_PkeyFreeCtx(ctx);
     }
 }
 
@@ -189,13 +174,20 @@ int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pu
     /* 避免复用旧上下文：每次握手建议生成新的 keypair */
     scloud_ctx_free(sc);
 
-    sc->pkey_ctx = find_and_call_newctx();
+    sc->pkey_ctx = new_pkey_ctx();
     if (!sc->pkey_ctx) return APP_ERR;
 
-    int32_t ret = call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits));
+    int32_t ret = set_para_by_secbits(sc->pkey_ctx, secbits);
     if (ret != 0) return APP_ERR;
 
-    if (call_gen(sc->pkey_ctx) != 0) return APP_ERR;
+    if (CRYPT_EAL_PkeyGen(sc->pkey_ctx) != 0) return APP_ERR;
+    printf("[SCloudPlus] key pair generated\n");
+
+    uint32_t pub_need = 0;
+    uint32_t prv_need = 0;
+    if (get_pkey_u32(sc->pkey_ctx, CRYPT_CTRL_GET_PUBKEY_LEN, &pub_need) != 0) return APP_ERR;
+    if (get_pkey_u32(sc->pkey_ctx, CRYPT_CTRL_GET_PRVKEY_LEN, &prv_need) != 0) return APP_ERR;
+    if (pub_need > pub_cap || prv_need > prv_cap) return APP_ERR;
 
     uint32_t l1 = pub_cap;
     if (call_get_pub(sc->pkey_ctx, pub, &l1) != 0) return APP_ERR;
@@ -212,57 +204,41 @@ int scloud_rsu_keygen(SCloudCtx *sc, uint32_t secbits, uint8_t *pub, uint32_t pu
 /**
  * @brief 通过 provider 的 KEM 实现进行封装：输出 (ciphertext, shared_secret)
  */
-static int32_t call_encaps(void *ctx, uint8_t *ct, uint32_t *ctLen, uint8_t *ss, uint32_t *ssLen)
+static int32_t call_encaps(CRYPT_EAL_PkeyCtx *ctx, uint8_t *ct, uint32_t *ctLen, uint8_t *ss, uint32_t *ssLen)
 {
-    for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_ENCAPSULATE) {
-            return ((int32_t(*)(void*, uint8_t*, uint32_t*, uint8_t*, uint32_t*))g_pqcpKemScloudPlus[i].func)
-                   (ctx, ct, ctLen, ss, ssLen);
-        }
-    }
-    return CRYPT_NOT_SUPPORT;
+    return CRYPT_EAL_PkeyEncaps(ctx, ct, ctLen, ss, ssLen);
 }
 
 /**
  * @brief 通过 provider 的 KEM 实现进行解封：输入 ciphertext，输出 shared_secret
  */
-static int32_t call_decaps(void *ctx, const uint8_t *ct, uint32_t ctLen, uint8_t *ss, uint32_t *ssLen)
+static int32_t call_decaps(CRYPT_EAL_PkeyCtx *ctx, const uint8_t *ct, uint32_t ctLen, uint8_t *ss, uint32_t *ssLen)
 {
-    for (int i = 0; g_pqcpKemScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKemScloudPlus[i].id == CRYPT_EAL_IMPLPKEYKEM_DECAPSULATE) {
-            return ((int32_t(*)(void*, const uint8_t*, uint32_t, uint8_t*, uint32_t*))g_pqcpKemScloudPlus[i].func)
-                   (ctx, ct, ctLen, ss, ssLen);
-        }
-    }
-    return CRYPT_NOT_SUPPORT;
+    return CRYPT_EAL_PkeyDecaps(ctx, ct, ctLen, ss, ssLen);
 }
 
 /**
  * @brief 将对端公钥写入 provider 上下文（用于封装）
  */
-static int32_t call_set_pub(void *ctx, const uint8_t *pub, uint32_t pub_len)
+static int32_t call_set_pub(CRYPT_EAL_PkeyCtx *ctx, const uint8_t *pub, uint32_t pub_len)
 {
-    BSL_Param p = {.key = CRYPT_PARAM_SCLOUDPLUS_PUBKEY, .value = (void *)pub, .valueLen = pub_len};
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPUB) {
-            return ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
-        }
-    }
-    return CRYPT_NOT_SUPPORT;
+    BSL_Param p[] = {
+        {PQCP_PARAM_SCLOUDPLUS_PUBKEY, BSL_PARAM_TYPE_OCTETS, (void *)pub, pub_len, 0},
+        BSL_PARAM_END
+    };
+    return CRYPT_EAL_PkeySetPubEx(ctx, p);
 }
 
 /**
  * @brief 将本端私钥写入 provider 上下文（用于解封）
  */
-static int32_t call_set_prv(void *ctx, const uint8_t *prv, uint32_t prv_len)
+static int32_t call_set_prv(CRYPT_EAL_PkeyCtx *ctx, const uint8_t *prv, uint32_t prv_len)
 {
-    BSL_Param p = {.key = CRYPT_PARAM_SCLOUDPLUS_PRVKEY, .value = (void *)prv, .valueLen = prv_len};
-    for (int i = 0; g_pqcpKeyMgmtScloudPlus[i].id != 0; i++) {
-        if (g_pqcpKeyMgmtScloudPlus[i].id == CRYPT_EAL_IMPLPKEYMGMT_SETPRV) {
-            return ((int32_t(*)(void*, BSL_Param*))g_pqcpKeyMgmtScloudPlus[i].func)(ctx, &p);
-        }
-    }
-    return CRYPT_NOT_SUPPORT;
+    BSL_Param p[] = {
+        {PQCP_PARAM_SCLOUDPLUS_PRVKEY, BSL_PARAM_TYPE_OCTETS, (void *)prv, prv_len, 0},
+        BSL_PARAM_END
+    };
+    return CRYPT_EAL_PkeySetPrvEx(ctx, p);
 }
 
 /**
@@ -275,16 +251,17 @@ int scloud_obu_encaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_pub, u
     if (!sc || !rsu_pub || rsu_pub_len == 0 || !cipher || !cipher_len || !k_pqc || !k_pqc_len) return APP_ERR;
 
     if (!sc->pkey_ctx) {
-        sc->pkey_ctx = find_and_call_newctx();
+        sc->pkey_ctx = new_pkey_ctx();
         if (!sc->pkey_ctx) return APP_ERR;
     }
 
-    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits)) != 0) return APP_ERR;
+    if (set_para_by_secbits(sc->pkey_ctx, secbits) != 0) return APP_ERR;
     if (call_set_pub(sc->pkey_ctx, rsu_pub, rsu_pub_len) != 0) return APP_ERR;
+    if (CRYPT_EAL_PkeyEncapsInit(sc->pkey_ctx, NULL) != 0) return APP_ERR;
 
     /* 查询本算法密文长度，并检查调用者缓冲区容量 */
     uint32_t ct_need = 0;
-    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_GET_CIPHERLEN, &ct_need, sizeof(ct_need)) != 0) return APP_ERR;
+    if (get_pkey_u32(sc->pkey_ctx, CRYPT_CTRL_GET_CIPHERTEXT_LEN, &ct_need) != 0) return APP_ERR;
     if (ct_need > *cipher_len) return APP_ERR;
 
     uint32_t ct_cap = *cipher_len;
@@ -308,12 +285,13 @@ int scloud_rsu_decaps(SCloudCtx *sc, uint32_t secbits, const uint8_t *rsu_prv, u
     if (!sc || !rsu_prv || rsu_prv_len == 0 || !cipher || cipher_len == 0 || !k_pqc || !k_pqc_len) return APP_ERR;
 
     if (!sc->pkey_ctx) {
-        sc->pkey_ctx = find_and_call_newctx();
+        sc->pkey_ctx = new_pkey_ctx();
         if (!sc->pkey_ctx) return APP_ERR;
     }
 
-    if (call_ctrl(sc->pkey_ctx, PQCP_SCLOUDPLUS_KEY_BITS, &secbits, sizeof(secbits)) != 0) return APP_ERR;
+    if (set_para_by_secbits(sc->pkey_ctx, secbits) != 0) return APP_ERR;
     if (call_set_prv(sc->pkey_ctx, rsu_prv, rsu_prv_len) != 0) return APP_ERR;
+    if (CRYPT_EAL_PkeyDecapsInit(sc->pkey_ctx, NULL) != 0) return APP_ERR;
 
     if (call_decaps(sc->pkey_ctx, cipher, cipher_len, k_pqc, k_pqc_len) != 0) return APP_ERR;
     return APP_OK;

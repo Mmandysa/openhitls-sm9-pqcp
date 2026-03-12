@@ -13,9 +13,10 @@
  */
 
 #include "common.h"
+#include "crypto/crypt_eal_pkey.h"
 
 typedef struct {
-    void *pkey_ctx;   // SCloud+ pkey 上下文
+    CRYPT_EAL_PkeyCtx *pkey_ctx;   // SCloud+ pkey 上下文
     uint32_t pk_len;
     uint32_t sk_len;
     // 注意：真实长度由 Ctrl -> GET_PARA/GET_CIPHERLEN 等接口决定
