@@ -46,6 +46,17 @@ typedef struct {
     uint64_t recv_seq;
 } PQTLS_Session;
 
+typedef struct {
+    /* 本端身份 ID（UTF-8） */
+    const char *local_id_utf8;
+
+    /* 期望的对端身份 ID（UTF-8） */
+    const char *peer_id_utf8;
+
+    /* 本端 SM9 签名私钥路径 */
+    const char *local_sign_key_path;
+} PQTLS_EndpointConfig;
+
 /**
  * @brief 客户端（Client）发起 PQTLS 握手，成功后 sess 中填充密钥与参数
  */
@@ -53,10 +64,20 @@ int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expec
                            PQTLS_Session *sess);
 
 /**
+ * @brief 客户端（Client）按自定义身份与私钥路径发起握手
+ */
+int pqtls_client_handshake_with_config(int fd, const PQTLS_EndpointConfig *config, PQTLS_Session *sess);
+
+/**
  * @brief 服务端（Server）执行 PQTLS 握手，成功后 sess 中填充密钥与参数
  */
 int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const char *server_id_utf8,
                            PQTLS_Session *sess);
+
+/**
+ * @brief 服务端（Server）按自定义身份与私钥路径执行握手
+ */
+int pqtls_server_handshake_with_config(int fd, const PQTLS_EndpointConfig *config, PQTLS_Session *sess);
 
 /**
  * @brief 在已建立的安全会话上发送应用数据（REC_APPDATA）

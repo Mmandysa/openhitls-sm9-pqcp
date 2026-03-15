@@ -11,6 +11,11 @@
 
 你可以用它做一个“类似 TLS 1.3 语义”的认证与握手过程：握手阶段完成身份认证与密钥派生，随后进入 record 层进行加密通信。
 
+除了 C 侧握手实现，仓库现在还包含一个交互式前端页面
+`demo/index.html`。这个页面把方案中的主体、身份、密钥、伪名、密钥更
+新和吊销流程组织成可点击、可执行的状态机，方便你从架构层面观察整个
+`SM9 + Scloud+` 方案。
+
 ---
 
 ## 1. 整体通信方案与握手流程（PQTLS v1）
@@ -139,6 +144,10 @@ app_type(2) || app_len(4) || app_payload(app_len)
 
 ```text
 openhitls-sm9-pqcp/
+├── demo/
+│   ├── index.html            # 交互式前端演示台：主体、密钥、伪名、轮换与流程执行
+│   ├── app.js                # 浏览器内状态机与流程数据
+│   └── styles.css            # 前端样式与动效
 ├── src/
 │   ├── client.c               # Client 演示程序（连接 + 握手 + 发送/接收 APP_TEXT）
 │   ├── server.c               # Server 演示程序（监听 + 握手 + 发送/接收 APP_TEXT）
@@ -151,10 +160,10 @@ openhitls-sm9-pqcp/
 │   ├── pqtls_crypto.{c,h}     # SM3/HMAC/HKDF（openHiTLS）
 │   ├── pqtls_keyschedule.{c,h}# Key schedule（HKDF-SM3）
 │   ├── pqtls_sm9_auth.{c,h}   # SM9_CERT_VERIFY 域分离签名/验签
-│   ├── pqtls_handshake.{c,h}  # 握手状态机（收发握手记录、transcript、认证、Finished）
+│   ├── pqtls_handshake.{c,h}  # 握手状态机（支持按身份/私钥路径切换 DID↔SID、PID↔RID）
 │   ├── pqtls_record.{c,h}     # Record Layer（SM4-GCM 加解密 + seq）
 │   ├── scloud_kem.{c,h}       # SCloud+ KEM 封装（PQCP provider）
-│   ├── sm9_utils.{c,h}        # SM9 签名密钥生成/加载/签名/验签（GmSSL）
+│   ├── sm9_utils.{c,h}        # SM9 演示身份密钥生成/加载/签名/验签（GmSSL）
 │   └── pqtls_test.c           # 一键自测：带 proxy 抓包打印 + 密钥比对
 ├── keys/                      # 运行时密钥材料（默认被 .gitignore 忽略）
 ├── Makefile                   # 一键编译：bin/server、bin/client、bin/setup_keys、bin/pqtls_test
@@ -198,10 +207,16 @@ make all
 
 - `keys/sm9_sign_master_key.pem`
 - `keys/sm9_sign_master_public.pem`
-- `keys/sm9_client_sign_key.pem`
-- `keys/sm9_server_sign_key.pem`
+- `keys/sm9_vehicle_did_sign_key.pem`
+- `keys/sm9_vehicle_pid_slot_a_sign_key.pem`
+- `keys/sm9_vehicle_pid_slot_b_sign_key.pem`
+- `keys/sm9_vehicle_pid_slot_c_sign_key.pem`
+- `keys/sm9_rsu_rid_sign_key.pem`
+- `keys/sm9_cloud_sid_sign_key.pem`
 
 ### 4.4 运行演示
+
+默认运行的是车云场景，也就是 `DID -> SID`。
 
 终端 A（先启动服务端）：
 
@@ -214,6 +229,23 @@ make all
 ```bash
 ./bin/client
 ```
+
+如果你要切换到车路场景，可以直接传入身份和私钥路径。例如：
+
+```bash
+./bin/server rsu:cn-sh:pudong:0012 keys/sm9_rsu_rid_sign_key.pem pid:oemA:cn-sh:slot-20260315-0930:0099
+./bin/client pid:oemA:cn-sh:slot-20260315-0930:0099 keys/sm9_vehicle_pid_slot_a_sign_key.pem rsu:cn-sh:pudong:0012
+```
+
+### 4.6 交互式前端演示
+
+你可以直接在浏览器中打开 `demo/index.html`。页面不依赖构建工具，也不需
+要额外后端，即可展示以下内容：
+
+- 六层架构和 10 个主体
+- 生产注入、车云接入、车路接入、PID 轮换、密钥更新与吊销
+- 当前步骤的身份、密钥、策略和审计快照
+- 每个主体对应的代码映射
 
 ### 4.5 一键自测（强烈推荐：抓包打印 + 密钥比对）
 
@@ -242,7 +274,7 @@ make run_test
 [WIRE][C->S][HS#0] hs_type=0x01 (CLIENT_HELLO), hs_len=70
   TLV VERSION=0x0001 (PQTLS_VERSION_V1)
   TLV RANDOM=client_random(32 bytes)
-  TLV SIGN_ID="琼B12345"
+  TLV SIGN_ID="dev:oemA:cn-sh:tbox:TBX00001"
   TLV SUPPORTED_KEM=[0x01 SCLOUDPLUS_128]
   TLV SUPPORTED_AEAD=[0x01 SM4-GCM-128]
   TLV SUPPORTED_HASH=[0x01 SM3]
@@ -257,14 +289,14 @@ make run_test
 [WIRE][S->C] PacketHeader.len=7420
 [WIRE][S->C][HS#0] hs_type=0x02 (SERVER_HELLO), hs_len=7288
   TLV RANDOM=server_random(32 bytes)
-  TLV SIGN_ID="RSU_001"
+  TLV SIGN_ID="svc:aizonec:tsp-auth"
   TLV SELECTED_KEM=0x01 (SCLOUDPLUS_128)
   TLV SELECTED_AEAD=0x01 (SM4-GCM-128)
   TLV SELECTED_HASH=0x01 (SM3)
   TLV KEM_PUBKEY(7216 bytes, prefix printed)
 [WIRE][S->C][HS#1] hs_type=0x0f (SM9_CERT_VERIFY), hs_len=124
   TLV SIG_ROLE=SERVER
-  TLV SIGN_ID="RSU_001"
+  TLV SIGN_ID="svc:aizonec:tsp-auth"
   TLV SIGNATURE(变长, prefix printed)
 ```
 
@@ -279,7 +311,7 @@ make run_test
   TLV KEM_CIPHERTEXT(5456 bytes, prefix printed)
 [WIRE][C->S][HS#1] hs_type=0x0f (SM9_CERT_VERIFY), hs_len=126
   TLV SIG_ROLE=CLIENT
-  TLV SIGN_ID="琼B12345"
+  TLV SIGN_ID="dev:oemA:cn-sh:tbox:TBX00001"
   TLV SIGNATURE(...)
 [WIRE][C->S][HS#2] hs_type=0x14 (FINISHED), hs_len=41
   TLV SIG_ROLE=CLIENT
@@ -328,9 +360,11 @@ export LD_LIBRARY_PATH=/usr/local/lib
 sudo ldconfig
 ```
 
-2) **修改 Client/Server ID 后握手失败**
+2) **修改身份或私钥路径后握手失败**
 
-SM9 是“身份即公钥”，如果你修改了 `src/client.c` / `src/server.c` 里的 ID，需要同步修改 `src/setup_keys.c` 并重新生成对应的 SM9 签名私钥：
+SM9 是“身份即公钥”。如果你改了命令行传入的 `client_id`、`server_id` 或
+私钥路径，就必须确认 `./bin/setup_keys` 已为该身份生成匹配的 SM9 签名
+私钥：
 
 ```bash
 make setup_keys

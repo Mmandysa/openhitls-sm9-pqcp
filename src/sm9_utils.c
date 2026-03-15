@@ -10,6 +10,11 @@
 #include <string.h>
 #include <sys/stat.h>
 
+typedef struct {
+    const char *id;
+    const char *filepath;
+} Sm9DemoIdentity;
+
 /**
  * @brief 确保 keys/ 目录存在（用于存放 SM9 pem 密钥文件）
  * @return APP_OK 成功；APP_ERR 失败
@@ -102,6 +107,30 @@ int sm9_issue_prv_for_id(const char *id, const char *filepath)
     }
     fclose(fp);
 
+    return APP_OK;
+}
+
+/**
+ * @brief 为演示身份集合批量签发 SM9 签名私钥
+ */
+int sm9_issue_demo_keys(void)
+{
+    static const Sm9DemoIdentity demo_identities[] = {
+        {PQTLS_DEMO_DEVICE_DID, SM9_DID_SIGN_KEY_PATH},
+        {PQTLS_DEMO_DEVICE_PID_SLOT_A, SM9_PID_SLOT_A_SIGN_KEY_PATH},
+        {PQTLS_DEMO_DEVICE_PID_SLOT_B, SM9_PID_SLOT_B_SIGN_KEY_PATH},
+        {PQTLS_DEMO_DEVICE_PID_SLOT_C, SM9_PID_SLOT_C_SIGN_KEY_PATH},
+        {PQTLS_DEMO_RSU_RID, SM9_RID_SIGN_KEY_PATH},
+        {PQTLS_DEMO_CLOUD_SID, SM9_SID_SIGN_KEY_PATH},
+    };
+
+    if (sm9_master_init() != APP_OK) return APP_ERR;
+
+    for (size_t i = 0; i < sizeof(demo_identities) / sizeof(demo_identities[0]); i++) {
+        if (sm9_issue_prv_for_id(demo_identities[i].id, demo_identities[i].filepath) != APP_OK) {
+            return APP_ERR;
+        }
+    }
     return APP_OK;
 }
 

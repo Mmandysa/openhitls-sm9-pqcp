@@ -14,15 +14,30 @@
  * - SM9 签名私钥由 TMC 离线颁发并写入 pem 文件，运行时从文件加载。
  */
 
-/* 密钥文件路径（相对项目根目录运行时的工作目录） */
-#define SM9_SIGN_MSK_PATH      "keys/sm9_sign_master_key.pem"
-#define SM9_SIGN_MPK_PATH      "keys/sm9_sign_master_public.pem"
-#define SM9_CLIENT_SIGN_KEY_PATH  "keys/sm9_client_sign_key.pem"
-#define SM9_SERVER_SIGN_KEY_PATH  "keys/sm9_server_sign_key.pem"
+/* 演示身份串 */
+#define PQTLS_DEMO_VEHICLE_ID          "veh:oemA:vehicle:00012345"
+#define PQTLS_DEMO_DEVICE_DID          "dev:oemA:cn-sh:tbox:TBX00001"
+#define PQTLS_DEMO_DEVICE_PID_SLOT_A   "pid:oemA:cn-sh:slot-20260315-0930:0099"
+#define PQTLS_DEMO_DEVICE_PID_SLOT_B   "pid:oemA:cn-sh:slot-20260315-0945:0100"
+#define PQTLS_DEMO_DEVICE_PID_SLOT_C   "pid:oemA:cn-sh:slot-20260315-1000:0101"
+#define PQTLS_DEMO_RSU_RID             "rsu:cn-sh:pudong:0012"
+#define PQTLS_DEMO_CLOUD_SID           "svc:aizonec:tsp-auth"
 
-/* 兼容旧命名（OBU/RSU） */
-#define SM9_OBU_SIGN_KEY_PATH SM9_CLIENT_SIGN_KEY_PATH
-#define SM9_RSU_SIGN_KEY_PATH SM9_SERVER_SIGN_KEY_PATH
+/* 密钥文件路径（相对项目根目录运行时的工作目录） */
+#define SM9_SIGN_MSK_PATH                 "keys/sm9_sign_master_key.pem"
+#define SM9_SIGN_MPK_PATH                 "keys/sm9_sign_master_public.pem"
+#define SM9_DID_SIGN_KEY_PATH             "keys/sm9_vehicle_did_sign_key.pem"
+#define SM9_PID_SLOT_A_SIGN_KEY_PATH      "keys/sm9_vehicle_pid_slot_a_sign_key.pem"
+#define SM9_PID_SLOT_B_SIGN_KEY_PATH      "keys/sm9_vehicle_pid_slot_b_sign_key.pem"
+#define SM9_PID_SLOT_C_SIGN_KEY_PATH      "keys/sm9_vehicle_pid_slot_c_sign_key.pem"
+#define SM9_RID_SIGN_KEY_PATH             "keys/sm9_rsu_rid_sign_key.pem"
+#define SM9_SID_SIGN_KEY_PATH             "keys/sm9_cloud_sid_sign_key.pem"
+
+/* 兼容旧命名 */
+#define SM9_CLIENT_SIGN_KEY_PATH SM9_DID_SIGN_KEY_PATH
+#define SM9_SERVER_SIGN_KEY_PATH SM9_SID_SIGN_KEY_PATH
+#define SM9_OBU_SIGN_KEY_PATH    SM9_DID_SIGN_KEY_PATH
+#define SM9_RSU_SIGN_KEY_PATH    SM9_RID_SIGN_KEY_PATH
 
 /* PEM 加密口令（演示用，生产环境应替换成安全的密钥保护方案） */
 #define SM9_KEY_PASSWORD "pqtls_demo_password"
@@ -40,6 +55,11 @@ int sm9_master_init(void);
  * @brief 为指定 ID 颁发 SM9 签名私钥，并写入 pem 文件
  */
 int sm9_issue_prv_for_id(const char *id, const char *filepath);
+
+/**
+ * @brief 为演示身份集合批量签发 SM9 签名私钥
+ */
+int sm9_issue_demo_keys(void);
 
 /* =========================
  * 运行时加载

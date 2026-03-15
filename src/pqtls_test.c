@@ -39,6 +39,7 @@ typedef struct {
     int listen_fd;
     const char *expected_client_id;
     const char *server_id;
+    const char *server_sign_key_path;
     PQTLS_Session *sess;
     int handshake_result;
     int appdata_result;
@@ -536,19 +537,18 @@ static void print_session_keys(const char *who, const PQTLS_Session *sess)
 /**
  * @brief 测试前确保 SM9 签名密钥材料存在，不存在则自动生成
  */
-static int ensure_sm9_test_keys(const char *client_id, const char *server_id)
+static int ensure_sm9_test_keys(void)
 {
     if (access(SM9_SIGN_MPK_PATH, R_OK) == 0 &&
-        access(SM9_CLIENT_SIGN_KEY_PATH, R_OK) == 0 &&
-        access(SM9_SERVER_SIGN_KEY_PATH, R_OK) == 0) {
+        access(SM9_DID_SIGN_KEY_PATH, R_OK) == 0 &&
+        access(SM9_SID_SIGN_KEY_PATH, R_OK) == 0 &&
+        access(SM9_RID_SIGN_KEY_PATH, R_OK) == 0 &&
+        access(SM9_PID_SLOT_A_SIGN_KEY_PATH, R_OK) == 0) {
         return APP_OK;
     }
 
     printf("[TEST] SM9 keys not found, generating keys into keys/ ...\n");
-    if (sm9_master_init() != APP_OK) return APP_ERR;
-    if (sm9_issue_prv_for_id(client_id, SM9_CLIENT_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
-    if (sm9_issue_prv_for_id(server_id, SM9_SERVER_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
-    return APP_OK;
+    return sm9_issue_demo_keys();
 }
 
 /**
@@ -566,7 +566,12 @@ static void *server_thread_main(void *arg)
         return NULL;
     }
 
-    a->handshake_result = pqtls_server_handshake(cfd, a->expected_client_id, a->server_id, a->sess);
+    PQTLS_EndpointConfig config = {
+        .local_id_utf8 = a->server_id,
+        .peer_id_utf8 = a->expected_client_id,
+        .local_sign_key_path = a->server_sign_key_path,
+    };
+    a->handshake_result = pqtls_server_handshake_with_config(cfd, &config, a->sess);
     a->appdata_result = APP_ERR;
     if (a->handshake_result == APP_OK) {
         /* 握手成功后，收一条消息再回一条，验证 record 层可用 */
@@ -598,8 +603,10 @@ static void *server_thread_main(void *arg)
  */
 int main(void)
 {
-    const char *client_id = "琼B12345";
-    const char *server_id = "RSU_001";
+    const char *client_id = PQTLS_DEMO_DEVICE_DID;
+    const char *client_sign_key_path = SM9_DID_SIGN_KEY_PATH;
+    const char *server_id = PQTLS_DEMO_CLOUD_SID;
+    const char *server_sign_key_path = SM9_SID_SIGN_KEY_PATH;
 
     /* 1) 初始化 PQCP provider（SCloud+） */
     if (scloud_global_init("/usr/local/lib") != APP_OK) {
@@ -608,7 +615,7 @@ int main(void)
     }
 
     /* 2) 确保 SM9 签名密钥存在 */
-    if (ensure_sm9_test_keys(client_id, server_id) != APP_OK) {
+    if (ensure_sm9_test_keys() != APP_OK) {
         fprintf(stderr, "[TEST] ensure SM9 keys failed\n");
         return 1;
     }
@@ -655,7 +662,8 @@ int main(void)
     memset(&client_sess, 0, sizeof(client_sess));
     memset(&server_sess, 0, sizeof(server_sess));
 
-    ServerThreadArgs sargs = {.listen_fd = lfd, .expected_client_id = client_id, .server_id = server_id, .sess = &server_sess,
+    ServerThreadArgs sargs = {.listen_fd = lfd, .expected_client_id = client_id, .server_id = server_id,
+                              .server_sign_key_path = server_sign_key_path, .sess = &server_sess,
                               .handshake_result = APP_ERR, .appdata_result = APP_ERR};
 
     pthread_t st;
@@ -688,7 +696,12 @@ int main(void)
         return 1;
     }
 
-    int cret = pqtls_client_handshake(cfd, client_id, server_id, &client_sess);
+    PQTLS_EndpointConfig client_config = {
+        .local_id_utf8 = client_id,
+        .peer_id_utf8 = server_id,
+        .local_sign_key_path = client_sign_key_path,
+    };
+    int cret = pqtls_client_handshake_with_config(cfd, &client_config, &client_sess);
     if (cret != APP_OK) {
         fprintf(stderr, "[TEST] client handshake failed: %d\n", cret);
         (void)shutdown(cfd, SHUT_RDWR);

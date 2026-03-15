@@ -13,33 +13,24 @@
 #include <stdio.h>
 
 /**
- * @brief 程序入口：生成 SM9 签名主密钥与 Client/Server 的签名私钥
+ * @brief 程序入口：生成方案演示所需的 SM9 签名主密钥与多身份私钥
  */
 int main(void)
 {
-    const char *client_id = "琼B12345";
-    const char *server_id = "RSU_001";
-
     printf("===== Generating SM9 SIGNATURE Keys (keys/*.pem) =====\n");
 
-    /* 1) 生成签名主密钥对（MSK/MPK） */
-    if (sm9_master_init() != APP_OK) {
-        fprintf(stderr, "Failed to init SM9 SIGN master key.\n");
+    if (sm9_issue_demo_keys() != APP_OK) {
+        fprintf(stderr, "Failed to issue demo SM9 SIGN keys.\n");
         return -1;
     }
 
-    /* 2) 为 Client 颁发签名私钥 */
-    if (sm9_issue_prv_for_id(client_id, SM9_CLIENT_SIGN_KEY_PATH) != APP_OK) {
-        fprintf(stderr, "Failed to issue SM9 SIGN key for Client.\n");
-        return -1;
-    }
-
-    /* 3) 为 Server 颁发签名私钥 */
-    if (sm9_issue_prv_for_id(server_id, SM9_SERVER_SIGN_KEY_PATH) != APP_OK) {
-        fprintf(stderr, "Failed to issue SM9 SIGN key for Server.\n");
-        return -1;
-    }
-
+    printf("Issued demo identities:\n");
+    printf("  DID  : %s -> %s\n", PQTLS_DEMO_DEVICE_DID, SM9_DID_SIGN_KEY_PATH);
+    printf("  PID-A: %s -> %s\n", PQTLS_DEMO_DEVICE_PID_SLOT_A, SM9_PID_SLOT_A_SIGN_KEY_PATH);
+    printf("  PID-B: %s -> %s\n", PQTLS_DEMO_DEVICE_PID_SLOT_B, SM9_PID_SLOT_B_SIGN_KEY_PATH);
+    printf("  PID-C: %s -> %s\n", PQTLS_DEMO_DEVICE_PID_SLOT_C, SM9_PID_SLOT_C_SIGN_KEY_PATH);
+    printf("  RID  : %s -> %s\n", PQTLS_DEMO_RSU_RID, SM9_RID_SIGN_KEY_PATH);
+    printf("  SID  : %s -> %s\n", PQTLS_DEMO_CLOUD_SID, SM9_SID_SIGN_KEY_PATH);
     printf("All SM9 SIGN keys generated successfully.\n");
     return 0;
 }

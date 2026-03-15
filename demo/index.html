@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SM9 + Scloud+ 车联网混合抗量子认证演示台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="hero card">
+      <div class="hero-copy">
+        <p class="eyebrow">openHiTLS + GmSSL + Scloud+</p>
+        <h1>SM9 与 Scloud+ 车联网混合抗量子认证演示台</h1>
+        <p class="hero-lead">
+          这个页面把仓库里的 C 侧实现和方案级状态机放在同一张操作台里。
+          你可以查看六层架构、点击主体看身份与密钥，并单步或自动执行
+          生产注入、车云接入、车路接入、伪名轮换和密钥更新流程。
+        </p>
+        <div class="suite-strip">
+          <span>SM9 身份认证</span>
+          <span>Scloud+ KEM</span>
+          <span>SM3 transcript / KDF</span>
+          <span>SM4-GCM 会话保护</span>
+          <span>DID / PID / RID / SID</span>
+        </div>
+      </div>
+      <div class="hero-metrics">
+        <article>
+          <strong>6</strong>
+          <span>架构层</span>
+        </article>
+        <article>
+          <strong>10</strong>
+          <span>核心主体</span>
+        </article>
+        <article>
+          <strong>5</strong>
+          <span>可执行流程</span>
+        </article>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="control-panel card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">control</p>
+            <h2>流程控制台</h2>
+          </div>
+          <p class="section-note">
+            先选场景，再执行。场景切换会重置步骤状态。
+          </p>
+        </div>
+        <div id="scenarioList" class="scenario-list" aria-label="方案场景列表"></div>
+        <div class="control-actions">
+          <button id="stepBtn" class="action primary" type="button">单步执行</button>
+          <button id="autoBtn" class="action" type="button">自动演示</button>
+          <button id="resetBtn" class="action subtle" type="button">重置流程</button>
+        </div>
+        <div class="implementation-map">
+          <h3>实现映射</h3>
+          <ul>
+            <li><code>src/pqtls_handshake.c</code> 负责握手状态机与 transcript 绑定</li>
+            <li><code>src/pqtls_sm9_auth.c</code> 负责 SM9 认证签名与验签</li>
+            <li><code>src/scloud_kem.c</code> 负责 Scloud+ KEM 封装与解封装</li>
+            <li><code>src/pqtls_keyschedule.c</code> 负责 SM3/HKDF 主密钥导出</li>
+            <li><code>src/pqtls_record.c</code> 负责 SM4-GCM 记录层保护</li>
+            <li><code>src/sm9_utils.c</code> 负责 DID/PID/RID/SID 演示密钥发放</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="stage card">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">topology</p>
+            <h2>总体架构与实时链路</h2>
+          </div>
+          <div id="stageStatus" class="stage-status"></div>
+        </div>
+        <div id="layerChips" class="layer-chips" aria-label="六层架构切换"></div>
+        <div class="topology-shell">
+          <div id="topologyCanvas" class="topology-canvas">
+            <svg id="linkLayer" class="link-layer" viewBox="0 0 100 100" preserveAspectRatio="none"
+              aria-hidden="true"></svg>
+            <div id="nodesLayer" class="nodes-layer"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="inspector">
+        <section class="card inspector-card">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">step</p>
+              <h2>当前步骤</h2>
+            </div>
+          </div>
+          <div id="stepCard"></div>
+        </section>
+
+        <section class="card inspector-card">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">selection</p>
+              <h2>选中对象</h2>
+            </div>
+          </div>
+          <div id="selectionCard"></div>
+        </section>
+
+        <section class="card inspector-card">
+          <div class="section-head compact">
+            <div>
+              <p class="section-kicker">state</p>
+              <h2>会话与密钥快照</h2>
+            </div>
+          </div>
+          <div id="stateCard"></div>
+        </section>
+      </aside>
+    </main>
+
+    <section class="timeline card">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">timeline</p>
+          <h2>流程时间线</h2>
+        </div>
+        <p class="section-note">
+          点击任一步可直接跳转。当前激活的链路会在拓扑图中同步高亮。
+        </p>
+      </div>
+      <div id="timelineList" class="timeline-list"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -503,10 +503,13 @@ static int recv_handshake_record(int fd, uint8_t *payload, uint32_t payload_cap,
     return APP_OK;
 }
 
-int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expected_server_id_utf8,
-                           PQTLS_Session *sess)
+int pqtls_client_handshake_with_config(int fd, const PQTLS_EndpointConfig *config, PQTLS_Session *sess)
 {
-    if (!sess || !client_id_utf8 || !expected_server_id_utf8) return APP_ERR;
+    if (!config || !sess || !config->local_id_utf8 || !config->peer_id_utf8 || !config->local_sign_key_path) return APP_ERR;
+
+    const char *client_id_utf8 = config->local_id_utf8;
+    const char *expected_server_id_utf8 = config->peer_id_utf8;
+    const char *client_sign_key_path = config->local_sign_key_path;
 
     memset(sess, 0, sizeof(*sess));
     sess->is_client = true;
@@ -528,7 +531,7 @@ int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expec
     if (load_sm9_master_pub_key(&mpk) != APP_OK) return APP_ERR;
 
     SM9_SIGN_KEY client_sign_key;
-    if (load_sm9_sign_key_from_file(&client_sign_key, SM9_CLIENT_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
+    if (load_sm9_sign_key_from_file(&client_sign_key, client_sign_key_path) != APP_OK) return APP_ERR;
 
     /* 1) 发送 CLIENT_HELLO */
     if (rand_bytes(sess->client_random, PQTLS_RANDOM_LEN) != 0) return APP_ERR;
@@ -712,10 +715,13 @@ int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expec
     return APP_OK;
 }
 
-int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const char *server_id_utf8,
-                           PQTLS_Session *sess)
+int pqtls_server_handshake_with_config(int fd, const PQTLS_EndpointConfig *config, PQTLS_Session *sess)
 {
-    if (!sess || !expected_client_id_utf8 || !server_id_utf8) return APP_ERR;
+    if (!config || !sess || !config->local_id_utf8 || !config->peer_id_utf8 || !config->local_sign_key_path) return APP_ERR;
+
+    const char *server_id_utf8 = config->local_id_utf8;
+    const char *expected_client_id_utf8 = config->peer_id_utf8;
+    const char *server_sign_key_path = config->local_sign_key_path;
 
     memset(sess, 0, sizeof(*sess));
     sess->is_client = false;
@@ -734,7 +740,7 @@ int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const ch
     if (load_sm9_master_pub_key(&mpk) != APP_OK) return APP_ERR;
 
     SM9_SIGN_KEY server_sign_key;
-    if (load_sm9_sign_key_from_file(&server_sign_key, SM9_SERVER_SIGN_KEY_PATH) != APP_OK) return APP_ERR;
+    if (load_sm9_sign_key_from_file(&server_sign_key, server_sign_key_path) != APP_OK) return APP_ERR;
 
     PQTLS_Transcript tr = {0};
 
@@ -935,4 +941,26 @@ int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const ch
     sess->send_seq = 0;
     sess->recv_seq = 0;
     return APP_OK;
+}
+
+int pqtls_client_handshake(int fd, const char *client_id_utf8, const char *expected_server_id_utf8,
+                           PQTLS_Session *sess)
+{
+    PQTLS_EndpointConfig config = {
+        .local_id_utf8 = client_id_utf8,
+        .peer_id_utf8 = expected_server_id_utf8,
+        .local_sign_key_path = SM9_CLIENT_SIGN_KEY_PATH,
+    };
+    return pqtls_client_handshake_with_config(fd, &config, sess);
+}
+
+int pqtls_server_handshake(int fd, const char *expected_client_id_utf8, const char *server_id_utf8,
+                           PQTLS_Session *sess)
+{
+    PQTLS_EndpointConfig config = {
+        .local_id_utf8 = server_id_utf8,
+        .peer_id_utf8 = expected_client_id_utf8,
+        .local_sign_key_path = SM9_SERVER_SIGN_KEY_PATH,
+    };
+    return pqtls_server_handshake_with_config(fd, &config, sess);
 }
